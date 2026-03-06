@@ -4,7 +4,9 @@ SOURCES := $(wildcard BatteryBar/Model/*.swift BatteryBar/View/*.swift BatteryBa
 APP_BUNDLE := BatteryBar.app
 BINARY := $(APP_BUNDLE)/Contents/MacOS/BatteryBar
 
-.PHONY: build run clean install release
+TEST_SOURCES := $(wildcard BatteryBar/Model/*.swift BatteryBar/Utility/*.swift BatteryBar/Tests/*.swift)
+
+.PHONY: build run clean install release test
 
 build: $(BINARY)
 
@@ -21,6 +23,15 @@ $(BINARY): $(SOURCES)
 
 run: build
 	open $(APP_BUNDLE)
+
+test:
+	@swiftc -parse-as-library \
+		-framework Foundation -framework SwiftUI \
+		-target $(TARGET) -sdk $(SDK) \
+		$(TEST_SOURCES) \
+		-o /tmp/batterybar-tests
+	@/tmp/batterybar-tests
+	@rm -f /tmp/batterybar-tests
 
 clean:
 	rm -rf $(APP_BUNDLE)/Contents/MacOS/BatteryBar BatteryBar.app.zip
