@@ -33,6 +33,15 @@ private func selectRepresentative(_ window: [BatteryReading], prev: BatteryReadi
     guard !window.isEmpty else { return nil }
     guard window.count > 1 else { return window[0] }
 
+    // Always preserve charging readings
+    var maxCharge = window[0]
+    for r in window {
+        if r.chargeWatts > maxCharge.chargeWatts { maxCharge = r }
+    }
+    if maxCharge.isCharging && maxCharge.chargeWatts > 0 {
+        return maxCharge
+    }
+
     // Find max and min consumption in window
     var maxCons = window[0], minCons = window[0]
     for r in window {
