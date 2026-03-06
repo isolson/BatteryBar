@@ -4,14 +4,17 @@ import Combine
 @main
 struct BatteryBarApp: App {
     @StateObject private var appState = AppState()
+    @StateObject private var updateChecker = UpdateChecker()
 
     var body: some Scene {
         MenuBarExtra {
             DetailPanel(
-                reading: appState.latestReading,
+                reading: appState.smoothedReading,
                 history: appState.history,
-                historyStore: appState.historyStore
+                historyStore: appState.historyStore,
+                updateChecker: updateChecker
             )
+            .task { await updateChecker.checkIfNeeded() }
         } label: {
             MenuBarLabel(reading: appState.smoothedReading)
         }
@@ -72,7 +75,14 @@ class AppState: ObservableObject {
             nominalChargeCapacity: reading.nominalChargeCapacity,
             systemPowerIn: Int(recentReadings.map { Double($0.systemPowerIn) }.reduce(0, +) / Double(recentReadings.count)),
             systemEnergyConsumed: reading.systemEnergyConsumed,
-            batteryPower: reading.batteryPower
+            batteryPower: reading.batteryPower,
+            adapterWatts: reading.adapterWatts,
+            adapterName: reading.adapterName,
+            chargingCurrent: reading.chargingCurrent,
+            slowChargingReason: reading.slowChargingReason,
+            notChargingReason: reading.notChargingReason,
+            thermallyLimited: reading.thermallyLimited,
+            adapterEfficiencyLoss: reading.adapterEfficiencyLoss
         )
     }
 

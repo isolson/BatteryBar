@@ -57,9 +57,19 @@ class BatteryService: ObservableObject {
               let props = propsUnmanaged?.takeRetainedValue() as? [String: Any] else { return }
 
         let telemetry = props["PowerTelemetryData"] as? [String: Any]
+        let chargerData = props["ChargerData"] as? [String: Any]
 
         let rawBatteryPower = telemetry?["BatteryPower"] as? UInt64 ?? 0
         let signedBatteryPower = Int64(bitPattern: rawBatteryPower)
+
+        // Adapter details: array of dicts, take first entry
+        var adapterWatts: Int? = nil
+        var adapterName: String? = nil
+        if let adapterDetails = props["AppleRawAdapterDetails"] as? [[String: Any]],
+           let first = adapterDetails.first {
+            adapterWatts = first["Watts"] as? Int
+            adapterName = first["Description"] as? String ?? first["Name"] as? String
+        }
 
         let reading = BatteryReading(
             id: UUID(),
@@ -79,7 +89,14 @@ class BatteryService: ObservableObject {
             nominalChargeCapacity: props["NominalChargeCapacity"] as? Int ?? 0,
             systemPowerIn: telemetry?["SystemPowerIn"] as? Int ?? 0,
             systemEnergyConsumed: telemetry?["SystemEnergyConsumed"] as? Int ?? 0,
-            batteryPower: signedBatteryPower
+            batteryPower: signedBatteryPower,
+            adapterWatts: adapterWatts,
+            adapterName: adapterName,
+            chargingCurrent: chargerData?["ChargingCurrent"] as? Int ?? 0,
+            slowChargingReason: chargerData?["SlowChargingReason"] as? Int ?? 0,
+            notChargingReason: chargerData?["NotChargingReason"] as? Int ?? 0,
+            thermallyLimited: chargerData?["TimeChargingThermallyLimited"] as? Int ?? 0,
+            adapterEfficiencyLoss: telemetry?["AdapterEfficiencyLoss"] as? Int ?? 0
         )
 
         DispatchQueue.main.async {
