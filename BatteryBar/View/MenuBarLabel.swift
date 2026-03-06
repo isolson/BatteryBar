@@ -17,7 +17,6 @@ struct MenuBarLabel: View {
 
         let numFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         let unitFont = NSFont.systemFont(ofSize: 6, weight: .regular)
-        let arrowFont = NSFont.systemFont(ofSize: 11, weight: .regular)
 
         let numAttrs: [NSAttributedString.Key: Any] = [
             .font: numFont,
@@ -27,25 +26,21 @@ struct MenuBarLabel: View {
             .font: unitFont,
             .baselineOffset: 1
         ]
-        let arrowAttrs: [NSAttributedString.Key: Any] = [
-            .font: arrowFont,
-            .baselineOffset: 0
-        ]
 
-        if r.externalConnected {
-            let num = BatteryFormatters.formatWattsNumber(r.chargeWatts)
+        if r.externalConnected && r.chargeWatts > 0 {
+            let num = BatteryFormatters.formatWattsNumber(r.chargeWatts, rounded: true)
             str.append(NSAttributedString(string: num, attributes: numAttrs))
             str.append(NSAttributedString(string: "w", attributes: unitAttrs))
-            str.append(NSAttributedString(string: "\u{2191} ", attributes: arrowAttrs))
+            str.append(NSAttributedString(string: " \u{2192} ", attributes: numAttrs))
         }
-
-        let consNum = BatteryFormatters.formatWattsNumber(r.consumptionWatts)
-        str.append(NSAttributedString(string: consNum, attributes: numAttrs))
-        str.append(NSAttributedString(string: "w", attributes: unitAttrs))
-        str.append(NSAttributedString(string: "\u{2193} ", attributes: arrowAttrs))
 
         str.append(NSAttributedString(string: "\(r.socPercent)", attributes: numAttrs))
         str.append(NSAttributedString(string: "%", attributes: unitAttrs))
+
+        let consNum = BatteryFormatters.formatWattsNumber(r.consumptionWatts, rounded: true)
+        str.append(NSAttributedString(string: " \u{2192} ", attributes: numAttrs))
+        str.append(NSAttributedString(string: consNum, attributes: numAttrs))
+        str.append(NSAttributedString(string: "w", attributes: unitAttrs))
 
         // Render at 2x for Retina
         let scale = NSScreen.main?.backingScaleFactor ?? 2.0

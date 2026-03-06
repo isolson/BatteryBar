@@ -3,9 +3,11 @@ import AppKit
 
 class HistoryStore: ObservableObject {
     @Published private(set) var readings: [BatteryReading] = []
+    @Published private(set) var graphReadings: [BatteryReading] = []
     private let persistenceURL: URL
     private var saveTimer: Timer?
     private var resignObserver: Any?
+    private var lastGraphUpdate: Date = .distantPast
 
     // 7 days max. Downsampling keeps this manageable:
     // ~720 (1h@5s) + ~1380 (23h@1min) + ~1728 (6d@5min) ≈ 3828 max
@@ -30,6 +32,15 @@ class HistoryStore: ObservableObject {
     func append(_ reading: BatteryReading) {
         readings.append(reading)
         pruneAndDownsample()
+        updateGraphReadingsIfNeeded()
+    }
+
+    private func updateGraphReadingsIfNeeded() {
+        let now = Date()
+        guard now.timeIntervalSince(lastGraphUpdate) >= 5 else { return }
+        lastGraphUpdate = now
+        let raw = readingsForTimeframe(.threeHours)
+        graphReadings = downsampleForDisplay(raw, targetCount: 30)
     }
 
     func saveToDisk() {
@@ -44,6 +55,25 @@ class HistoryStore: ObservableObject {
     func readingsForTimeframe(_ timeframe: Timeframe) -> [BatteryReading] {
         let cutoff = Date().addingTimeInterval(-timeframe.seconds)
         return readings.filter { $0.timestamp > cutoff }
+    }
+
+    func readingsSinceLastFull() -> [BatteryReading] {
+        let twoDaysAgo = Date().addingTimeInterval(-2 * 24 * 3600)
+        let recent = readings.filter { $0.timestamp > twoDaysAgo }
+
+        // Some Macs report 99% as full, so use >= 99
+        guard let lastFullIdx = recent.lastIndex(where: { $0.socPercent >= 99 }) else {
+            return recent
+        }
+
+        // If the most recent reading is full, show just the last hour
+        if lastFullIdx == recent.count - 1 {
+            let oneHourAgo = Date().addingTimeInterval(-3600)
+            return recent.filter { $0.timestamp > oneHourAgo }
+        }
+
+        // Otherwise, show from the last full point onward (current discharge)
+        return Array(recent[lastFullIdx...])
     }
 
     // MARK: - Downsampling
@@ -114,6 +144,7 @@ class HistoryStore: ObservableObject {
             let loaded = try JSONDecoder().decode([BatteryReading].self, from: data)
             let cutoff = Date().addingTimeInterval(-maxAge)
             readings = loaded.filter { $0.timestamp > cutoff }
+            updateGraphReadingsIfNeeded()
         } catch {
             print("BatteryBar: Failed to load history: \(error)")
         }
@@ -128,6 +159,8 @@ class HistoryStore: ObservableObject {
 
 enum Timeframe: String, CaseIterable, Identifiable {
     case oneHour = "1h"
+    case threeHours = "3h"
+    case sixHours = "6h"
     case twelveHours = "12h"
     case oneDay = "24h"
     case sevenDays = "7d"
@@ -137,9 +170,33 @@ enum Timeframe: String, CaseIterable, Identifiable {
     var seconds: TimeInterval {
         switch self {
         case .oneHour: return 3600
+        case .threeHours: return 3 * 3600
+        case .sixHours: return 6 * 3600
         case .twelveHours: return 12 * 3600
         case .oneDay: return 24 * 3600
         case .sevenDays: return 7 * 24 * 3600
+        }
+    }
+
+    var gapThreshold: TimeInterval {
+        switch self {
+        case .oneHour: return 120
+        case .threeHours: return 180
+        case .sixHours: return 300
+        case .twelveHours: return 600
+        case .oneDay: return 600
+        case .sevenDays: return 1800
+        }
+    }
+
+    var axisFormat: Date.FormatStyle {
+        switch self {
+        case .oneHour:
+            return .dateTime.hour().minute()
+        case .threeHours, .sixHours, .twelveHours, .oneDay:
+            return .dateTime.hour(.defaultDigits(amPM: .abbreviated))
+        case .sevenDays:
+            return .dateTime.weekday(.abbreviated)
         }
     }
 }
