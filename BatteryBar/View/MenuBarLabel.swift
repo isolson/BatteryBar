@@ -2,10 +2,10 @@ import SwiftUI
 import AppKit
 
 struct MenuBarLabel: View {
-    let reading: BatteryReading?
+    @ObservedObject var appState: AppState
 
     var body: some View {
-        if let r = reading {
+        if let r = appState.smoothedReading {
             Image(nsImage: renderLabel(r))
         } else {
             Text("--")

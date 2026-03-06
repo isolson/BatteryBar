@@ -6,7 +6,13 @@ struct EnergyHog: Identifiable {
     let icon: NSImage?
 }
 
+private var cachedHogs: [EnergyHog] = []
+private var cacheTimestamp: Date = .distantPast
+
 func topEnergyApps(limit: Int = 3, threshold: Double = 5.0) -> [EnergyHog] {
+    // Return cached result if fresh (< 10s old)
+    if Date().timeIntervalSince(cacheTimestamp) < 10 { return cachedHogs }
+
     // Get top CPU processes via ps
     let task = Process()
     task.executableURL = URL(fileURLWithPath: "/bin/ps")
@@ -109,5 +115,8 @@ func topEnergyApps(limit: Int = 3, threshold: Double = 5.0) -> [EnergyHog] {
         .sorted { $0.totalCPU > $1.totalCPU }
         .prefix(limit)
 
-    return sorted.map { EnergyHog(id: $0.pid, name: $0.name, icon: $0.icon) }
+    let result = sorted.map { EnergyHog(id: $0.pid, name: $0.name, icon: $0.icon) }
+    cachedHogs = result
+    cacheTimestamp = Date()
+    return result
 }
