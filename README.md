@@ -2,15 +2,17 @@
 
 A lightweight macOS menu bar app that shows battery charge wattage, system consumption, and state of charge at a glance.
 
-![BatteryBar screenshot](screenshot.png)
+![BatteryBar detail panel](screenshot.png)
+
+![BatteryBar menu bar](screenshot-menubar.png)
 
 ## Features
 
 - **Live wattage display** in the menu bar: charge power (in), system consumption (out), and battery %
+- **Charging diagnostics** — detects slow chargers, cable issues, thermal throttling, and trickle charging near full
 - **Detail panel** with voltage, amperage, temperature, cycle count, health, and time remaining
-- **Power and SOC graphs** with 1h / 12h / 24h / 7d timeframe selector
-- **7-day history** with automatic downsampling and persistence across restarts
-- **Peak-preserving smoothing** — graphs stay readable without hiding spikes
+- **Energy hog detection** — shows apps using significant energy
+- **Automatic update checking** via GitHub releases
 - **Sleep/wake aware** — pauses polling during sleep, shows gaps in graphs
 - **Retina-ready** menu bar rendering
 - **Zero dependencies** — pure Swift + SwiftUI + IOKit, no third-party packages
