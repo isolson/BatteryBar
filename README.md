@@ -13,8 +13,7 @@ A lightweight macOS menu bar app that shows battery charge wattage, system consu
 - **Detail panel** with voltage, amperage, temperature, cycle count, health, and time remaining
 - **Energy hog detection** — shows apps using significant energy
 - **Automatic update checking** via GitHub releases
-- **Sleep/wake aware** — pauses polling during sleep, shows gaps in graphs
-- **Retina-ready** menu bar rendering
+- **Sleep/wake aware** — pauses polling during sleep
 - **Zero dependencies** — pure Swift + SwiftUI + IOKit, no third-party packages
 - **No dock icon** — lives entirely in the menu bar
 
@@ -46,8 +45,9 @@ Requires Xcode Command Line Tools (`xcode-select --install`).
 BatteryBar reads directly from the IOKit `AppleSmartBattery` registry every 5 seconds. No shell commands are spawned — it uses `IOServiceGetMatchingService` and `IORegistryEntryCreateCFProperties` for minimal overhead.
 
 - **Charge wattage**: `PowerTelemetryData.SystemPowerIn` (adapter power to system)
-- **Consumption**: `SystemPowerIn - (Voltage * Amperage)` (real-time system draw)
+- **Consumption**: On AC: `SystemPowerIn - (Voltage * Amperage)`. On battery: `|Voltage * Amperage|`
 - **SOC**: `CurrentCapacity` from the battery controller
+- **Charging diagnostics**: `ChargerData` + `AppleRawAdapterDetails` for bottleneck detection
 
 History is stored in `~/Library/Application Support/BatteryBar/history.json`.
 
