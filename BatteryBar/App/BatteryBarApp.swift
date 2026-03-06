@@ -9,14 +9,12 @@ struct BatteryBarApp: App {
     var body: some Scene {
         MenuBarExtra {
             DetailPanel(
-                reading: appState.smoothedReading,
-                history: appState.history,
-                historyStore: appState.historyStore,
+                appState: appState,
                 updateChecker: updateChecker
             )
             .task { await updateChecker.checkIfNeeded() }
         } label: {
-            MenuBarLabel(reading: appState.smoothedReading)
+            MenuBarLabel(appState: appState)
         }
         .menuBarExtraStyle(.window)
     }

@@ -1,16 +1,13 @@
 import SwiftUI
 
 struct DetailPanel: View {
-    let reading: BatteryReading?
-    let history: [BatteryReading]
-    let historyStore: HistoryStore
+    @ObservedObject var appState: AppState
     @ObservedObject var updateChecker: UpdateChecker
     @State private var showDetails = true
-    @State private var frozenHistory: [BatteryReading] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let r = reading {
+            if let r = appState.smoothedReading {
                 // Flow diagram header + verdict
                 VStack(spacing: 6) {
                     flowDiagram(r)
@@ -119,7 +116,6 @@ struct DetailPanel: View {
         }
         .padding(10)
         .frame(width: 250)
-        .onAppear { frozenHistory = historyStore.graphReadings }
     }
 
     // MARK: - Flow Diagram
