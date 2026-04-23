@@ -1,22 +1,80 @@
+import AppKit
 import SwiftUI
 import Combine
 
+@MainActor
+class AppDelegate: NSObject, NSApplicationDelegate {
+    let appState = AppState()
+    let updateChecker = UpdateChecker()
+
+    private var statusItem: NSStatusItem!
+    private var popover: NSPopover!
+    private var cancellable: AnyCancellable?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem.button {
+            button.title = "--"
+            button.target = self
+            button.action = #selector(togglePopover)
+        }
+
+        popover = NSPopover()
+        popover.contentSize = NSSize(width: 270, height: 380)
+        popover.behavior = .transient
+        let checker = updateChecker
+        popover.contentViewController = NSHostingController(
+            rootView: DetailPanel(appState: appState, updateChecker: updateChecker)
+                .task { await checker.checkIfNeeded() }
+        )
+
+        cancellable = appState.$smoothedReading
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] reading in
+                self?.updateStatusBar(reading)
+            }
+
+        appState.start()
+        CrashGuard.install()
+    }
+
+    private func updateStatusBar(_ reading: BatteryReading?) {
+        guard let button = statusItem.button else { return }
+        if let r = reading {
+            button.image = MenuBarRenderer.renderLabel(r)
+            button.title = ""
+        } else {
+            button.image = nil
+            button.title = "--"
+        }
+    }
+
+    @objc private func togglePopover() {
+        guard let button = statusItem.button else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.makeKey()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        appState.prepareForTermination()
+        CrashGuard.markCleanExit()
+    }
+}
+
 @main
 struct BatteryBarApp: App {
-    @StateObject private var appState = AppState()
-    @StateObject private var updateChecker = UpdateChecker()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+    init() {
+        CrashGuard.handleHelperInvocationIfNeeded()
+    }
 
     var body: some Scene {
-        MenuBarExtra {
-            DetailPanel(
-                appState: appState,
-                updateChecker: updateChecker
-            )
-            .task { await updateChecker.checkIfNeeded() }
-        } label: {
-            MenuBarLabel(appState: appState)
-        }
-        .menuBarExtraStyle(.window)
+        Settings { EmptyView() }
     }
 }
 
@@ -46,7 +104,9 @@ class AppState: ObservableObject {
         historyStore.$readings
             .receive(on: DispatchQueue.main)
             .assign(to: &$history)
+    }
 
+    func start() {
         batteryService.startPolling()
     }
 
@@ -84,7 +144,8 @@ class AppState: ObservableObject {
         )
     }
 
-    func saveHistory() {
+    func prepareForTermination() {
+        batteryService.stopPolling()
         historyStore.saveToDisk()
     }
 }

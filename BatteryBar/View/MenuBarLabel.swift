@@ -1,18 +1,8 @@
 import SwiftUI
 import AppKit
 
-struct MenuBarLabel: View {
-    @ObservedObject var appState: AppState
-
-    var body: some View {
-        if let r = appState.smoothedReading {
-            Image(nsImage: renderLabel(r))
-        } else {
-            Text("--")
-        }
-    }
-
-    private func renderLabel(_ r: BatteryReading) -> NSImage {
+enum MenuBarRenderer {
+    static func renderLabel(_ r: BatteryReading) -> NSImage {
         let str = NSMutableAttributedString()
 
         let numFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
