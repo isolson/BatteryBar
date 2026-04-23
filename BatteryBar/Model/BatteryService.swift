@@ -9,13 +9,14 @@ class BatteryService: ObservableObject {
     private var pollInterval: TimeInterval = 5.0
     private var sleepObserver: Any?
     private var wakeObserver: Any?
+    private var isPolling = false
 
     func startPolling(interval: TimeInterval = 5.0) {
+        guard !isPolling else { return }
+        isPolling = true
         pollInterval = interval
         readBattery()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.readBattery()
-        }
+        scheduleTimer(interval: interval)
 
         sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification,
@@ -31,15 +32,30 @@ class BatteryService: ObservableObject {
         ) { [weak self] _ in
             guard let self = self else { return }
             self.readBattery()
-            self.timer = Timer.scheduledTimer(withTimeInterval: self.pollInterval, repeats: true) { [weak self] _ in
-                self?.readBattery()
-            }
+            self.scheduleTimer(interval: self.pollInterval)
         }
     }
 
     func stopPolling() {
         timer?.invalidate()
         timer = nil
+        isPolling = false
+
+        if let obs = sleepObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+            sleepObserver = nil
+        }
+        if let obs = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(obs)
+            wakeObserver = nil
+        }
+    }
+
+    private func scheduleTimer(interval: TimeInterval) {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            self?.readBattery()
+        }
     }
 
     private func readBattery() {
@@ -105,7 +121,6 @@ class BatteryService: ObservableObject {
     }
 
     deinit {
-        if let obs = sleepObserver { NSWorkspace.shared.notificationCenter.removeObserver(obs) }
-        if let obs = wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(obs) }
+        stopPolling()
     }
 }
