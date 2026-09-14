@@ -9,6 +9,10 @@ enum CrashGuardTests {
         testRecoverIfNeededRemovesCleanExitMarker()
         testRecoverIfNeededRelaunchesAndPersistsAttempt()
         testRecoverIfNeededSuppressesWhenBudgetExhausted()
+        testInvalidTimestampsDoNotCrash()
+        testCleanExitMarkersAreIsolated()
+        testFailedStateWriteSuppressesRecovery()
+        testConcurrentRecoveryIsSuppressed()
     }
 
     private static func testAllowsUpToThreeRestartsWithinWindow() {
@@ -115,5 +119,63 @@ enum CrashGuardTests {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         return dir
+    }
+
+    private static func testInvalidTimestampsDoNotCrash() {
+        let state = CrashGuard.RestartPolicyState(attempts: [.nan, .infinity, -.infinity, 1e300, 999, 1_001])
+        let serialized = CrashGuard.serializeRestartState(state)
+        assert(!serialized.contains("nan") && !serialized.contains("inf"))
+        assert(CrashGuard.normalizedState(state, now: 1_000).attempts == [999])
+        assert(!CrashGuard.shouldRelaunch(.init(), now: .nan))
+        assert(CrashGuard.parseRestartState("nan\ninf\n999\ninvalid").attempts == [999])
+    }
+
+    private static func testCleanExitMarkersAreIsolated() {
+        let supportDir = makeTempSupportDir()
+        defer { try? FileManager.default.removeItem(at: supportDir) }
+        let first = UUID()
+        let second = UUID()
+        let marker = supportDir.appendingPathComponent(".clean_exit.\(first.uuidString)")
+        try! Data().write(to: marker)
+        let secondOutcome = CrashGuard.recoverIfNeeded(
+            supportDirectory: supportDir, sessionID: second, now: 1_000,
+            beforeRelaunch: {}, relaunch: { _ in }
+        )
+        assert(secondOutcome == .relaunched)
+        assert(FileManager.default.fileExists(atPath: marker.path))
+        let firstOutcome = CrashGuard.recoverIfNeeded(
+            supportDirectory: supportDir, sessionID: first, now: 1_000,
+            beforeRelaunch: {}, relaunch: { _ in assertionFailure("Clean Quit must not restart") }
+        )
+        assert(firstOutcome == .cleanExit)
+    }
+
+    private static func testFailedStateWriteSuppressesRecovery() {
+        let supportDir = makeTempSupportDir()
+        defer { try? FileManager.default.removeItem(at: supportDir) }
+        // A directory at the state-file path produces a deterministic write failure.
+        try! FileManager.default.createDirectory(at: supportDir.appendingPathComponent(".restart_state"),
+                                                withIntermediateDirectories: false)
+        let result = CrashGuard.recoverIfNeeded(
+            supportDirectory: supportDir, now: 1_000, beforeRelaunch: {},
+            relaunch: { _ in assertionFailure("Recovery must stop if its budget cannot be saved") }
+        )
+        assert(result == .suppressed)
+    }
+
+    private static func testConcurrentRecoveryIsSuppressed() {
+        let supportDir = makeTempSupportDir()
+        defer { try? FileManager.default.removeItem(at: supportDir) }
+        let result = CrashGuard.recoverIfNeeded(
+            supportDirectory: supportDir, now: 1_000,
+            beforeRelaunch: {
+                let concurrent = CrashGuard.recoverIfNeeded(
+                    supportDirectory: supportDir, now: 1_000, beforeRelaunch: {},
+                    relaunch: { _ in assertionFailure("Another helper owns recovery") }
+                )
+                assert(concurrent == .suppressed)
+            }, relaunch: { _ in }
+        )
+        assert(result == .relaunched)
     }
 }

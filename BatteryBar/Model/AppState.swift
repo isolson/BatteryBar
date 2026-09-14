@@ -41,6 +41,15 @@ class AppState: ObservableObject {
     }
 
     private func updateSmoothed(_ reading: BatteryReading) {
+        if let previous = recentReadings.last {
+            let gap = reading.timestamp.timeIntervalSince(previous.timestamp)
+            if previous.externalConnected != reading.externalConnected
+                || previous.isCharging != reading.isCharging
+                || (previous.systemPowerIn == nil) != (reading.systemPowerIn == nil)
+                || gap < 0 || gap > 15 {
+                recentReadings.removeAll()
+            }
+        }
         recentReadings.append(reading)
         if recentReadings.count > 3 { recentReadings.removeFirst() }
 
@@ -51,7 +60,7 @@ class AppState: ObservableObject {
             currentCapacity: reading.currentCapacity,
             maxCapacity: reading.maxCapacity,
             voltage: reading.voltage,
-            amperage: Int(recentReadings.map { Double($0.amperage) }.reduce(0, +) / Double(recentReadings.count)),
+            amperage: Self.average(recentReadings.map(\.amperage))!,
             instantAmperage: reading.instantAmperage,
             isCharging: reading.isCharging,
             externalConnected: reading.externalConnected,
@@ -61,7 +70,7 @@ class AppState: ObservableObject {
             avgTimeToEmpty: reading.avgTimeToEmpty,
             designCapacity: reading.designCapacity,
             nominalChargeCapacity: reading.nominalChargeCapacity,
-            systemPowerIn: Int(recentReadings.map { Double($0.systemPowerIn) }.reduce(0, +) / Double(recentReadings.count)),
+            systemPowerIn: Self.average(recentReadings.compactMap(\.systemPowerIn)),
             systemEnergyConsumed: reading.systemEnergyConsumed,
             batteryPower: reading.batteryPower,
             adapterWatts: reading.adapterWatts,
@@ -72,6 +81,20 @@ class AppState: ObservableObject {
             thermallyLimited: reading.thermallyLimited,
             adapterEfficiencyLoss: reading.adapterEfficiencyLoss
         )
+    }
+
+    /// Divide before adding so all Int values, including both limits, remain safe.
+    private static func average(_ values: [Int]) -> Int? {
+        guard !values.isEmpty else { return nil }
+        let count = values.count
+        let quotient = values.reduce(0) { $0 + $1 / count }
+        let remainder = values.reduce(0) { $0 + $1 % count }
+        let result = quotient + remainder / count
+        let fraction = remainder % count
+        // Match integer division toward zero when the whole and fraction differ in sign.
+        if result > 0 && fraction < 0 { return result - 1 }
+        if result < 0 && fraction > 0 { return result + 1 }
+        return result
     }
 
     func prepareForTermination() {

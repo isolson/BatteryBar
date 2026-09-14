@@ -31,7 +31,7 @@ Version 1.0.0 has a known signing fault ([issue #3](https://github.com/isolson/B
 - Polling that pauses during sleep and resumes on wake
 - Crash recovery with a limit on repeated restarts
 
-Measurements depend on the Mac and macOS version. Missing temperature or health values show **Unavailable**. Charging advice is an estimate.
+Measurements depend on the Mac and macOS version. Missing temperature or health values show **Unavailable**. Missing power values show **--** in the menu and power diagram. Charging advice is an estimate.
 
 ## Build from source
 
@@ -42,7 +42,7 @@ git clone https://github.com/isolson/BatteryBar.git
 cd BatteryBar
 make build   # Create BatteryBar.app for local use
 make run     # Build and open the app
-make install # Copy the app to /Applications
+make install # Replace the app in /Applications; quit that copy first
 make test    # Run the tests
 ```
 
@@ -56,7 +56,9 @@ Health uses the reported full-charge capacity divided by design capacity. Batter
 
 Temperature also falls back to `BatteryData.Temperature` on child `AppleSmartBatteryPack` entries. These values are hundredths of a degree Celsius. If the aggregate value is absent and multiple packs report a temperature, BatteryBar shows the highest one.
 
-Battery polling uses no command processes. The energy estimate runs `ps`; crash recovery uses a shell watcher. There are no third-party runtime packages. History is stored in `~/Library/Application Support/BatteryBar/history.json`.
+Battery polling uses no command processes. The energy estimate runs `ps` in the background with a time limit. Crash recovery uses a shell watcher and stops after three repeated restarts within a minute or if it cannot save its restart count. There are no third-party runtime packages. History is stored in `~/Library/Application Support/BatteryBar/history.json`.
+
+If history contains damaged records, BatteryBar recovers valid records and keeps a copy of the original file. If it cannot keep that copy, it stops automatic history saves to protect the original.
 
 ## License
 

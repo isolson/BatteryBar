@@ -4,6 +4,7 @@ struct DetailPanel: View {
     @ObservedObject var appState: AppState
     @ObservedObject var updateChecker: UpdateChecker
     @State private var showDetails = true
+    @StateObject private var energyMonitor = EnergyHogMonitor()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -46,7 +47,7 @@ struct DetailPanel: View {
                     .font(.caption)
 
                     // Energy-hungry apps
-                    let hogs = topEnergyApps()
+                    let hogs = energyMonitor.hogs
                     if !hogs.isEmpty {
                         Divider()
                         VStack(alignment: .leading, spacing: 4) {
@@ -115,6 +116,9 @@ struct DetailPanel: View {
         .padding(10)
         .frame(width: 280)
         .fixedSize(horizontal: false, vertical: true)
+        .task(id: showDetails) {
+            if showDetails { await energyMonitor.poll() }
+        }
     }
 
     // MARK: - Flow Diagram
@@ -126,18 +130,18 @@ struct DetailPanel: View {
         Grid(horizontalSpacing: 4, verticalSpacing: 1) {
             GridRow(alignment: .firstTextBaseline) {
                 if showCharger {
-                    flowValue(icon: "bolt.fill", value: BatteryFormatters.formatWatts(r.deliveringWatts))
+                    flowPowerValue(icon: "bolt.fill", watts: r.deliveringWatts,
+                                   description: "Power supplied by the connected charger")
                         .foregroundStyle(.green)
-                        .help("Power supplied by the connected charger")
                     flowArrow
                 }
 
                 flowValue(icon: batteryIcon(r.socPercent), value: "\(r.socPercent)%")
                     .help("Current battery charge level")
                 flowArrow
-                flowValue(icon: "cpu", value: BatteryFormatters.formatWatts(r.consumptionWatts))
+                flowPowerValue(icon: "cpu", watts: r.consumptionWatts,
+                               description: "Power being used by the laptop right now")
                     .foregroundStyle(.orange)
-                    .help("Power being used by the laptop right now")
             }
 
             GridRow {
@@ -155,6 +159,11 @@ struct DetailPanel: View {
         .lineLimit(1)
         .fixedSize()
         .frame(maxWidth: .infinity)
+    }
+
+    private func flowPowerValue(icon: String, watts: Double?, description: String) -> some View {
+        flowValue(icon: icon, value: watts.map { BatteryFormatters.formatWatts($0) } ?? "--")
+            .help(watts == nil ? "Power measurement unavailable" : description)
     }
 
     private func flowValue(icon: String, value: String) -> some View {

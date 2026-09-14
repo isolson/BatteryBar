@@ -13,9 +13,12 @@ enum BatteryServiceTests {
         testMeasurementLayouts()
         testPackTemperature()
         testUnavailableMeasurements()
+        testSignedCurrentAndUnavailablePower()
         testFullChargeStatus()
         try testHistoryCompatibility()
         try await testReadFailureAndRecovery()
+        try await testExtremeSmoothing()
+        try await testSmoothingTransitions()
         try await testSleepWakeAndStop()
         print("Battery data, history, and polling tests passed.")
     }
@@ -127,6 +130,123 @@ enum BatteryServiceTests {
         props["AvgTimeToEmpty"] = 180
         let discharging = BatteryService.reading(from: props)!
         assert(discharging.timeRemainingMinutes == 180, "Keep time left on battery at 100%")
+        props["AvgTimeToEmpty"] = -1
+        assert(BatteryService.reading(from: props)!.timeRemainingMinutes == nil)
+        props["AvgTimeToEmpty"] = Int.max
+        assert(BatteryService.reading(from: props)!.timeRemainingMinutes == nil)
+    }
+
+    private static func testSignedCurrentAndUnavailablePower() {
+        var props = properties
+        props["Amperage"] = NSNumber(value: UInt64(bitPattern: -1000))
+        props["InstantAmperage"] = UInt64(bitPattern: -1250)
+        props["IsCharging"] = false
+        props["ExternalConnected"] = false
+        let signed = BatteryService.reading(from: props)!
+        assert(signed.amperage == -1000 && signed.instantAmperage == -1250)
+        assert(signed.consumptionWatts == 12)
+
+        props = properties
+        props.removeValue(forKey: "PowerTelemetryData")
+        let missing = BatteryService.reading(from: props)!
+        assert(missing.systemPowerIn == nil && missing.deliveringWatts == nil)
+        assert(missing.consumptionWatts == nil)
+        assert(BatteryFormatters.formatWatts(missing.deliveringWatts) == "Unavailable")
+        assert(BatteryFormatters.formatWattsNumber(missing.consumptionWatts) == "--")
+        assert(BatteryFormatters.bottleneckText(missing.chargingBottleneck) == "Detecting…")
+
+        props["Amperage"] = 0
+        props["PowerTelemetryData"] = ["SystemPowerIn": 0]
+        let zero = BatteryService.reading(from: props)!
+        assert(zero.deliveringWatts == 0 && zero.consumptionWatts == 0,
+               "A measured zero must remain distinct from unavailable telemetry")
+        props["PowerTelemetryData"] = ["SystemPowerIn": -1]
+        assert(BatteryService.reading(from: props)!.systemPowerIn == nil)
+    }
+
+    private static func testExtremeSmoothing() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var next: [String: Any]? = properties
+        let service = BatteryService(readProperties: { next.map { .init(battery: $0) } })
+        let state = AppState(batteryService: service,
+                             historyStore: HistoryStore(persistenceURL: directory.appendingPathComponent("history.json")))
+        let cases: [([Int], Int)] = [
+            ([Int.max], Int.max), ([Int.min], Int.min),
+            ([Int.max, Int.max, Int.max], Int.max),
+            ([Int.min, Int.min, Int.min], Int.min),
+            ([Int.max, Int.max, Int.min], Int.max / 3),
+            ([Int.min, Int.min, Int.max], Int.min / 3 - 1),
+            ([-1, 2], 0), ([1, -2], 0), ([10, 20, 30], 20)
+        ]
+        for (values, expected) in cases {
+            next = nil
+            service.readBattery()
+            await drainPublications()
+            for value in values {
+                next = properties
+                next?["Amperage"] = value
+                next?["PowerTelemetryData"] = ["SystemPowerIn": Int.max]
+                service.readBattery()
+                await drainPublications()
+            }
+            assert(state.smoothedReading?.amperage == expected)
+            assert(state.smoothedReading?.systemPowerIn == Int.max)
+        }
+        state.prepareForTermination()
+    }
+
+    private static func testSmoothingTransitions() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var next = properties
+        let service = BatteryService(readProperties: { .init(battery: next) })
+        let state = AppState(batteryService: service,
+                             historyStore: HistoryStore(persistenceURL: directory.appendingPathComponent("history.json")))
+        service.readBattery()
+        await drainPublications()
+
+        next["ExternalConnected"] = false
+        next["IsCharging"] = false
+        next["Amperage"] = -1000
+        service.readBattery()
+        await drainPublications()
+        assert(state.smoothedReading?.amperage == -1000, "Unplugging must not retain charging current")
+
+        next["ExternalConnected"] = true
+        next["IsCharging"] = true
+        next["Amperage"] = 2000
+        next["PowerTelemetryData"] = ["SystemPowerIn": 60000]
+        service.readBattery()
+        await drainPublications()
+        assert(state.smoothedReading?.systemPowerIn == 60000)
+        assert(state.smoothedReading?.amperage == 2000)
+
+        next["IsCharging"] = false
+        next["Amperage"] = 0
+        service.readBattery()
+        await drainPublications()
+        assert(state.smoothedReading?.amperage == 0, "Finishing charge must clear the old current")
+
+        next.removeValue(forKey: "PowerTelemetryData")
+        service.readBattery()
+        await drainPublications()
+        assert(state.smoothedReading?.systemPowerIn == nil)
+        next["PowerTelemetryData"] = ["SystemPowerIn": 10000]
+        service.readBattery()
+        await drainPublications()
+        assert(state.smoothedReading?.systemPowerIn == 10000)
+
+        var oldJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(service.latestReading!)) as! [String: Any]
+        oldJSON["timestamp"] = Date().addingTimeInterval(-120).timeIntervalSinceReferenceDate
+        service.latestReading = try JSONDecoder().decode(BatteryReading.self,
+                                                        from: JSONSerialization.data(withJSONObject: oldJSON))
+        await drainPublications()
+        next["PowerTelemetryData"] = ["SystemPowerIn": 50000]
+        service.readBattery()
+        await drainPublications()
+        assert(state.smoothedReading?.systemPowerIn == 50000, "Do not average across a sleep gap")
+        state.prepareForTermination()
     }
 
     private static func testHistoryCompatibility() throws {

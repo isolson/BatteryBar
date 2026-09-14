@@ -6,9 +6,9 @@ Run these checks on the exact draft ZIP before publication. Use an Apple Silicon
 2. Open the ZIP in Finder. Before first launch, confirm that the app retains its download quarantine attribute with `xattr -p com.apple.quarantine BatteryBar.app`. Do not remove this attribute or change macOS security settings.
 3. From the matching source revision, run `bash scripts/verify-app.sh /absolute/path/to/BatteryBar.app --release`. It must pass signature, Apple approval ticket, and Gatekeeper checks.
 4. Drag the app to Applications, then open it. The normal downloaded-app confirmation is acceptable. A damaged-app warning or an unidentified-developer override is a failure.
-5. Confirm that the menu reading appears and the panel opens. Check charging and battery power. Wait at least 15 seconds in each state to allow the display average to settle. Check that charge percentage agrees with macOS. Missing temperature or health must show **Unavailable**.
+5. Confirm that the menu reading appears and the panel opens. Switch between charger and battery power; the source must change on the next poll, within five seconds. The charger must stay visible when charging stops. Check that charge percentage agrees with macOS. Missing temperature or health must show **Unavailable**; missing power must show **--**.
 6. Put the Mac to sleep and wake it. Confirm that readings resume and the panel still opens. Check the panel in light and dark appearance, and collapse and expand Details.
-7. Click **Quit**, wait at least 10 seconds, and confirm that the app stays closed. Reopen it and confirm that saved history still loads.
+7. Click **Quit**, reopen within two seconds, then quit again. Wait at least 10 seconds and confirm that the app stays closed. Reopen it and confirm that saved history still loads and any available update notice remains visible.
 8. Repeat first launch from a fresh user account with network access disabled to check the attached approval ticket. Keep normal macOS security settings enabled.
 
 After publication, check that version 1.0 shows **Update Available** and opens the v1.1.0 release page. Automatic checks can wait up to six hours after a previous successful check.

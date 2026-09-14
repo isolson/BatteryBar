@@ -125,6 +125,14 @@ class BatteryService: ObservableObject {
         let signedBatteryPower = telemetry?["BatteryPower"] as? Int64
             ?? Int64(bitPattern: telemetry?["BatteryPower"] as? UInt64 ?? 0)
 
+        func signedCurrent(_ key: String) -> Int {
+            if let value = props[key] as? Int { return value }
+            // IOKit can expose a negative signed value as its unsigned bit pattern.
+            return Int(truncatingIfNeeded: props[key] as? UInt64 ?? 0)
+        }
+
+        let powerIn = (telemetry?["SystemPowerIn"] as? Int).flatMap { $0 >= 0 ? $0 : nil }
+
         // Adapter details: array of dicts, take first entry
         var adapterWatts: Int? = nil
         var adapterName: String? = nil
@@ -140,8 +148,8 @@ class BatteryService: ObservableObject {
             currentCapacity: currentCapacity,
             maxCapacity: props["MaxCapacity"] as? Int ?? 100,
             voltage: props["Voltage"] as? Int ?? 0,
-            amperage: props["Amperage"] as? Int ?? 0,
-            instantAmperage: props["InstantAmperage"] as? Int ?? 0,
+            amperage: signedCurrent("Amperage"),
+            instantAmperage: signedCurrent("InstantAmperage"),
             isCharging: props["IsCharging"] as? Bool ?? false,
             externalConnected: props["ExternalConnected"] as? Bool ?? false,
             cycleCount: props["CycleCount"] as? Int ?? 0,
@@ -150,7 +158,7 @@ class BatteryService: ObservableObject {
             avgTimeToEmpty: props["AvgTimeToEmpty"] as? Int ?? 65535,
             designCapacity: measurement("DesignCapacity", in: props),
             nominalChargeCapacity: measurement("NominalChargeCapacity", in: props),
-            systemPowerIn: telemetry?["SystemPowerIn"] as? Int ?? 0,
+            systemPowerIn: powerIn,
             systemEnergyConsumed: telemetry?["SystemEnergyConsumed"] as? Int ?? 0,
             batteryPower: signedBatteryPower,
             adapterWatts: adapterWatts,

@@ -47,8 +47,7 @@ clean:
 	rm -rf .build $(APP_BUNDLE) dist BatteryBar.app.zip
 
 install: build
-	ditto $(APP_BUNDLE) /Applications/BatteryBar.app
-	@echo "Installed to /Applications/BatteryBar.app"
+	@bash scripts/install.sh $(APP_BUNDLE)
 
 release:
 	@bash scripts/release.sh

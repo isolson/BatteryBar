@@ -35,7 +35,7 @@ struct BatteryReading: Codable, Identifiable {
     let nominalChargeCapacity: Int? // mAh (current full capacity)
 
     // PowerTelemetryData
-    let systemPowerIn: Int      // mW
+    let systemPowerIn: Int?     // mW; nil when input telemetry is unavailable
     let systemEnergyConsumed: Int // mW
     let batteryPower: Int64     // mW (signed)
 
@@ -57,7 +57,7 @@ struct BatteryReading: Codable, Identifiable {
     init(id: UUID, timestamp: Date, currentCapacity: Int, maxCapacity: Int, voltage: Int,
          amperage: Int, instantAmperage: Int, isCharging: Bool, externalConnected: Bool,
          cycleCount: Int, temperature: Int?, avgTimeToFull: Int, avgTimeToEmpty: Int,
-         designCapacity: Int?, nominalChargeCapacity: Int?, systemPowerIn: Int,
+         designCapacity: Int?, nominalChargeCapacity: Int?, systemPowerIn: Int?,
          systemEnergyConsumed: Int, batteryPower: Int64, adapterWatts: Int?,
          adapterName: String?, chargingCurrent: Int, slowChargingReason: Int,
          notChargingReason: Int, thermallyLimited: Int, adapterEfficiencyLoss: Int) {
@@ -94,7 +94,7 @@ struct BatteryReading: Codable, Identifiable {
         avgTimeToEmpty = try c.decode(Int.self, forKey: .avgTimeToEmpty)
         designCapacity = try c.decodeIfPresent(Int.self, forKey: .designCapacity)
         nominalChargeCapacity = try c.decodeIfPresent(Int.self, forKey: .nominalChargeCapacity)
-        systemPowerIn = try c.decode(Int.self, forKey: .systemPowerIn)
+        systemPowerIn = try c.decodeIfPresent(Int.self, forKey: .systemPowerIn)
         systemEnergyConsumed = try c.decode(Int.self, forKey: .systemEnergyConsumed)
         batteryPower = try c.decode(Int64.self, forKey: .batteryPower)
         // New fields — default to nil/0 for old data
@@ -114,7 +114,7 @@ struct BatteryReading: Codable, Identifiable {
     var chargeWatts: Double {
         guard externalConnected, isCharging else { return 0 }
         // Prefer PowerTelemetryData, fall back to V*A
-        if systemPowerIn > 0 {
+        if let systemPowerIn, systemPowerIn > 0 {
             return Double(systemPowerIn) / 1000.0
         }
         return abs(batteryChargeWatts)
@@ -125,10 +125,10 @@ struct BatteryReading: Codable, Identifiable {
         return Double(voltage) * Double(amperage) / 1_000_000.0
     }
 
-    var consumptionWatts: Double {
+    var consumptionWatts: Double? {
         if externalConnected {
             // On AC: system consumption = adapter power - battery charge power
-            let adapterW = Double(systemPowerIn) / 1000.0
+            guard let adapterW = deliveringWatts else { return nil }
             let batteryW = batteryChargeWatts // positive when charging
             return max(adapterW - batteryW, 0)
         } else {
@@ -151,12 +151,9 @@ struct BatteryReading: Codable, Identifiable {
     }
 
     var timeRemainingMinutes: Int? {
-        if isCharging {
-            guard socPercent < 100 else { return nil }
-            return avgTimeToFull == 65535 ? nil : avgTimeToFull
-        } else {
-            return avgTimeToEmpty == 65535 ? nil : avgTimeToEmpty
-        }
+        guard !isCharging || socPercent < 100 else { return nil }
+        let minutes = isCharging ? avgTimeToFull : avgTimeToEmpty
+        return (0..<65535).contains(minutes) ? minutes : nil
     }
 
     var batteryHealth: Double? {
@@ -165,8 +162,9 @@ struct BatteryReading: Codable, Identifiable {
         return Double(nominalChargeCapacity) / Double(designCapacity) * 100.0
     }
 
-    var deliveringWatts: Double {
-        Double(systemPowerIn) / 1000.0
+    var deliveringWatts: Double? {
+        guard let systemPowerIn, systemPowerIn >= 0 else { return nil }
+        return Double(systemPowerIn) / 1000.0
     }
 
     var chargingBottleneck: ChargingBottleneck {
@@ -190,11 +188,11 @@ struct BatteryReading: Codable, Identifiable {
         if socPercent > 80 { return .slowingNearFull(soc: socPercent) }
 
         // Check charger utilization
+        guard let delivering = deliveringWatts else { return .detecting }
         if let adapterW = adapterWatts, adapterW > 0 {
             if adapterW <= 30 {
                 return .limitedByCharger(adapterW: adapterW)
             }
-            let delivering = deliveringWatts
             // Ramp-up: delivering very little from a large adapter
             if delivering < 5 {
                 return .detecting

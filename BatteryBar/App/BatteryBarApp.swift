@@ -62,18 +62,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        appState.prepareForTermination()
         CrashGuard.markCleanExit()
+        appState.prepareForTermination()
     }
 }
 
 @main
+enum BatteryBarMain {
+    @MainActor
+    static func main() {
+        // Recovery helpers must not create app state or write battery history.
+        CrashGuard.handleHelperInvocationIfNeeded()
+        BatteryBarApp.main()
+    }
+}
+
 struct BatteryBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    init() {
-        CrashGuard.handleHelperInvocationIfNeeded()
-    }
 
     var body: some Scene {
         Settings { EmptyView() }
