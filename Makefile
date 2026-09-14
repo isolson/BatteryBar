@@ -6,19 +6,25 @@ FRAMEWORKS := -framework SwiftUI -framework Charts -framework IOKit -framework C
 BINARY := .build/BatteryBar
 APP_BUNDLE := BatteryBar.app
 PLIST := BatteryBar/Resources/Info.plist
+ICON := .build/BatteryBar.icns
 
-export SIGNING_IDENTITY NOTARY_PROFILE NOTARY_KEYCHAIN RELEASE_TAG
+export SIGNING_IDENTITY NOTARY_PROFILE NOTARY_KEYCHAIN RELEASE_TAG REQUIRE_LAYERED_ICON
 
 .PHONY: build run clean install release test verify
 
-build: $(BINARY) $(PLIST)
+build: $(BINARY) $(PLIST) $(ICON)
 	@rm -rf $(APP_BUNDLE)
-	@mkdir -p $(APP_BUNDLE)/Contents/MacOS
+	@mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources
 	@cp $(PLIST) $(APP_BUNDLE)/Contents/Info.plist
 	@cp $(BINARY) $(APP_BUNDLE)/Contents/MacOS/BatteryBar
+	@cp $(ICON) $(APP_BUNDLE)/Contents/Resources/BatteryBar.icns
+	@bash scripts/add-layered-icon.sh $(APP_BUNDLE)
 	codesign --force --sign - $(APP_BUNDLE)
 	@bash scripts/verify-app.sh $(APP_BUNDLE)
 	@echo "Built $(APP_BUNDLE) for local use"
+
+$(ICON): artwork/AppIcon.png scripts/build-icon.sh
+	@bash scripts/build-icon.sh $@
 
 $(BINARY): $(SOURCES) Makefile
 	@mkdir -p .build

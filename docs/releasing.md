@@ -1,6 +1,6 @@
 # Release BatteryBar
 
-Public releases require a **Developer ID Application** certificate and Apple notarization. An Apple Development certificate is not sufficient. Follow [Apple's signing requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+Public releases require Xcode 26 or later for the layered app icon, a **Developer ID Application** certificate, and Apple notarization. An Apple Development certificate is not sufficient. Follow [Apple's signing requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 
 ## One-time setup
 

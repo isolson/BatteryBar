@@ -1,5 +1,7 @@
 # BatteryBar
 
+<img src="artwork/AppIcon.png" alt="BatteryBar app icon" width="96" height="96">
+
 BatteryBar shows charger power, system power use, and battery charge in the macOS menu bar.
 
 ![BatteryBar detail panel](screenshot.png)

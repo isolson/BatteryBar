@@ -7,6 +7,7 @@ BatteryBar 1.1.0 supports Apple Silicon MacBooks with macOS 13 or later, includi
 - Keep charger input visible in the panel and menu bar while plugged in, including when battery charging stops.
 - At 100%, show “Finishing charge” while macOS still reports charging and hide the time to full.
 - Align the power readings and labels, place the status below the power diagram, and size the menu panel to its content.
+- Add a sage green battery icon with three controls on the left. Use SVG layers for current macOS effects and a flat fallback for older systems.
 - Include the menu panel update and crash recovery fixes made since version 1.0.0.
 - Provide a Developer ID signed and notarized app with an attached Apple approval ticket. This addresses the damaged-app download reported in issue #3.
 

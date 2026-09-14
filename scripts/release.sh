@@ -19,7 +19,7 @@ if [[ -n "${NOTARY_KEYCHAIN:-}" ]]; then
 fi
 
 make test
-make build
+REQUIRE_LAYERED_ICON=1 make build
 mkdir -p .build dist
 stage=$(mktemp -d "$PWD/.build/release.XXXXXX")
 trap 'rm -rf "$stage"' EXIT

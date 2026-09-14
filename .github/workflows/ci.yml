@@ -25,6 +25,15 @@ jobs:
           sw_vers
           xcrun swiftc --version
       - name: Test and build
+        env:
+          REQUIRE_LAYERED_ICON: ${{ matrix.os == 'macos-26' && '1' || '0' }}
         run: make test build
       - name: Check packaging and release safeguards
         run: bash scripts/test-release.sh
+      - name: Save compiled icon for macOS appearance checks
+        if: matrix.os == 'macos-26'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: BatteryBar-layered-icon
+          path: .build/layered-icon/
+          if-no-files-found: error

@@ -8,6 +8,8 @@
 	<string>com.isolson.BatteryBar</string>
 	<key>CFBundleName</key>
 	<string>BatteryBar</string>
+	<key>CFBundleIconFile</key>
+	<string>BatteryBar.icns</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
