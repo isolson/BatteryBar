@@ -51,6 +51,8 @@ enum BatteryFormatters {
             return "Paused \u{2014} too warm"
         case .slowingNearFull:
             return "Slowing near full"
+        case .finishingCharge:
+            return "Finishing charge"
         case .chargingNormally:
             return "Charging at full speed"
         case .notCharging:
@@ -68,7 +70,7 @@ enum BatteryFormatters {
             return .yellow
         case .limitedByLaptop:
             return .orange
-        case .slowingNearFull, .notCharging, .detecting:
+        case .slowingNearFull, .finishingCharge, .notCharging, .detecting:
             return .gray
         case .chargingNormally:
             return .green

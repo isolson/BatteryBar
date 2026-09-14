@@ -202,7 +202,7 @@ struct DetailPanel: View {
             } else if !r.externalConnected {
                 Text("On Battery")
                     .foregroundStyle(.secondary)
-            } else if r.socPercent >= 99 {
+            } else if r.socPercent >= 100 {
                 Text("Fully Charged")
                     .foregroundStyle(.secondary)
             }

@@ -8,6 +8,7 @@ enum ChargingBottleneck {
     case limitedByChargerOrCable(adapterW: Int, deliveringW: Int)
     case limitedByLaptop
     case slowingNearFull(soc: Int)
+    case finishingCharge
     case chargingNormally(adapterW: Int?)
     case notCharging
     case detecting
@@ -151,6 +152,7 @@ struct BatteryReading: Codable, Identifiable {
 
     var timeRemainingMinutes: Int? {
         if isCharging {
+            guard socPercent < 100 else { return nil }
             return avgTimeToFull == 65535 ? nil : avgTimeToFull
         } else {
             return avgTimeToEmpty == 65535 ? nil : avgTimeToEmpty
@@ -170,8 +172,8 @@ struct BatteryReading: Codable, Identifiable {
     var chargingBottleneck: ChargingBottleneck {
         guard externalConnected else { return .none }
 
-        // Full and not charging
-        if socPercent >= 100 && !isCharging { return .none }
+        // The percentage can reach 100 before macOS clears its charging flag.
+        if socPercent >= 100 { return isCharging ? .finishingCharge : .none }
 
         // Connected but not charging at all
         if !isCharging && chargingCurrent == 0 {

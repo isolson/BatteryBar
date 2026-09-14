@@ -13,6 +13,7 @@ enum BatteryServiceTests {
         testMeasurementLayouts()
         testPackTemperature()
         testUnavailableMeasurements()
+        testFullChargeStatus()
         try testHistoryCompatibility()
         try await testReadFailureAndRecovery()
         try await testSleepWakeAndStop()
@@ -99,6 +100,33 @@ enum BatteryServiceTests {
         props["NominalChargeCapacity"] = 0
         let zero = BatteryService.reading(from: props)!
         assert(zero.temperatureCelsius == nil && zero.batteryHealth == nil)
+    }
+
+    private static func testFullChargeStatus() {
+        var props = properties
+        props["CurrentCapacity"] = 99
+        props["AvgTimeToFull"] = 12
+        let nearFull = BatteryService.reading(from: props)!
+        assert(BatteryFormatters.bottleneckText(nearFull.chargingBottleneck) == "Slowing near full")
+        assert(nearFull.timeRemainingMinutes == 12)
+
+        // Reported on macOS 27: 100%, still charging, and a nonzero time to full.
+        props["CurrentCapacity"] = 100
+        let finishing = BatteryService.reading(from: props)!
+        assert(BatteryFormatters.bottleneckText(finishing.chargingBottleneck) == "Finishing charge")
+        assert(finishing.timeRemainingMinutes == nil, "Do not show time to full at 100%")
+        assert(finishing.avgTimeToFull == 12, "Preserve the raw estimate in history")
+
+        props["IsCharging"] = false
+        let full = BatteryService.reading(from: props)!
+        if case .none = full.chargingBottleneck {} else {
+            assertionFailure("A full, idle battery must show the Fully Charged fallback")
+        }
+
+        props["ExternalConnected"] = false
+        props["AvgTimeToEmpty"] = 180
+        let discharging = BatteryService.reading(from: props)!
+        assert(discharging.timeRemainingMinutes == 180, "Keep time left on battery at 100%")
     }
 
     private static func testHistoryCompatibility() throws {
