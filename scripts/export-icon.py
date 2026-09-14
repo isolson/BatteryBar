@@ -23,7 +23,8 @@ svg = ET.fromstring('''<svg xmlns="http://www.w3.org/2000/svg" width="1024" heig
 <rect x="96" y="96" width="832" height="832" rx="184" fill="url(#background)" stroke="#59616A" stroke-width="2"/>
 </svg>''')
 composition = ET.SubElement(svg, f'{{{ns}}}g', {'transform': 'translate(96 96) scale(0.8125)'})
-for group in manifest['groups']:
+# Icon Composer lists the front group first; SVG draws back to front.
+for group in reversed(manifest['groups']):
     target = ET.SubElement(composition, f'{{{ns}}}g', {'filter': 'url(#shadow)'})
     for layer in group['layers']:
         source = ET.parse(package / 'Assets' / layer['image-name']).getroot()
