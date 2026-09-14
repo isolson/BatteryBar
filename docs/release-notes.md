@@ -1,6 +1,7 @@
 BatteryBar 1.1.0 supports Apple Silicon MacBooks with macOS 13 or later, including macOS 27.
 
 - Fix battery health readings when macOS supplies capacity values in nested battery data.
+- Read temperature from child battery packs on macOS 27 and correct the conversion to Celsius.
 - Show **Unavailable** for missing temperature and health measurements.
 - Clear stale readings after a failed battery read and resume on the next successful read.
 - Include the menu panel update and crash recovery fixes made since version 1.0.0.

@@ -27,7 +27,7 @@ struct BatteryReading: Codable, Identifiable {
     let isCharging: Bool
     let externalConnected: Bool
     let cycleCount: Int
-    let temperature: Int?        // deci-Kelvin
+    let temperature: Int?       // hundredths of a degree Celsius
     let avgTimeToFull: Int      // minutes, 65535 = N/A
     let avgTimeToEmpty: Int     // minutes, 65535 = N/A
     let designCapacity: Int?     // mAh
@@ -138,7 +138,7 @@ struct BatteryReading: Codable, Identifiable {
 
     var temperatureCelsius: Double? {
         guard let temperature, temperature > 0 else { return nil }
-        return Double(temperature) / 10.0 - 273.15
+        return Double(temperature) / 100.0
     }
 
     var voltageVolts: Double {

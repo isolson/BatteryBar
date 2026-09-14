@@ -52,6 +52,8 @@ BatteryBar reads the IOKit `AppleSmartBattery` registry every five seconds. It u
 
 Health uses the reported full-charge capacity divided by design capacity. BatteryBar reads these values from the top-level registry fields or the nested `BatteryData` fields.
 
+Temperature also falls back to `BatteryData.Temperature` on child `AppleSmartBatteryPack` entries. These values are hundredths of a degree Celsius. If the aggregate value is absent and multiple packs report a temperature, BatteryBar shows the highest one.
+
 Battery polling uses no command processes. The energy estimate runs `ps`; crash recovery uses a shell watcher. There are no third-party runtime packages. History is stored in `~/Library/Application Support/BatteryBar/history.json`.
 
 ## License

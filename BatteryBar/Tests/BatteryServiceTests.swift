@@ -11,6 +11,7 @@ enum BatteryServiceTests {
 
     static func runAll() async throws {
         testMeasurementLayouts()
+        testPackTemperature()
         testUnavailableMeasurements()
         try testHistoryCompatibility()
         try await testReadFailureAndRecovery()
@@ -24,7 +25,7 @@ enum BatteryServiceTests {
         props["DesignCapacity"] = 6000
         props["NominalChargeCapacity"] = 5400
         let old = BatteryService.reading(from: props)!
-        assert(abs(old.temperatureCelsius! - 30.05) < 0.001)
+        assert(abs(old.temperatureCelsius! - 30.32) < 0.001)
         assert(old.batteryHealth == 90)
 
         // macOS 27 on the development Mac supplies capacities in BatteryData.
@@ -53,6 +54,30 @@ enum BatteryServiceTests {
         assert(discharge.consumptionWatts == 12)
         props["PowerTelemetryData"] = ["BatteryPower": UInt64(bitPattern: -12000)]
         assert(BatteryService.reading(from: props)!.batteryPower == -12000)
+    }
+
+    private static func testPackTemperature() {
+        // Captured from AppleSmartBatteryPack.BatteryData on the development Mac.
+        // SMC TB1T independently reported 31.7 C for this 3169 registry value.
+        let pack: [String: Any] = ["BatteryData": ["Temperature": 3169, "VirtualTemperature": 3169]]
+        let reading = BatteryService.reading(from: properties, packs: [pack])!
+        assert(abs(reading.temperatureCelsius! - 31.69) < 0.001)
+        assert(BatteryFormatters.formatTemperature(reading.temperatureCelsius) == "31.7°C")
+
+        var aggregate = properties
+        aggregate["Temperature"] = 3032
+        assert(BatteryService.reading(from: aggregate, packs: [pack])!.temperature == 3032)
+        aggregate.removeValue(forKey: "Temperature")
+        aggregate["BatteryData"] = ["Temperature": 3011]
+        assert(BatteryService.reading(from: aggregate, packs: [pack])!.temperature == 3011)
+
+        let coolerPack: [String: Any] = ["Temperature": 2800]
+        assert(BatteryService.reading(from: properties, packs: [coolerPack, pack])!.temperature == 3169)
+        let noLiveTemperature: [String: Any] = [
+            "BatteryData": ["Temperature": 0, "VirtualTemperature": 3169,
+                            "AverageTemperature": 240, "MaximumTemperature": 46]
+        ]
+        assert(BatteryService.reading(from: properties, packs: [noLiveTemperature])!.temperature == nil)
     }
 
     private static func testUnavailableMeasurements() {
@@ -94,6 +119,7 @@ enum BatteryServiceTests {
             let store = HistoryStore(persistenceURL: url)
             assert(store.readings.count == 1)
             assert(store.readings[0].batteryHealth == 90)
+            assert(store.readings[0].temperatureCelsius == 30.32)
             assert(store.readings[0].adapterWatts == nil)
             store.append(BatteryService.reading(from: properties)!)
             store.saveToDisk()
@@ -116,13 +142,16 @@ enum BatteryServiceTests {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         var next: [String: Any]? = properties
-        let service = BatteryService(readProperties: { next })
+        let service = BatteryService(readProperties: {
+            next.map { BatteryService.RegistryProperties(battery: $0, packs: [["BatteryData": ["Temperature": 3169]]]) }
+        })
         let state = AppState(batteryService: service,
                              historyStore: HistoryStore(persistenceURL: directory.appendingPathComponent("history.json")))
         service.readBattery()
         await drainPublications()
         assert(state.latestReading?.socPercent == 77)
         assert(state.smoothedReading?.systemPowerIn == 30000)
+        assert(state.smoothedReading?.temperatureCelsius == 31.69)
         assert(state.historyStore.readings.count == 1)
 
         next = nil
@@ -143,7 +172,10 @@ enum BatteryServiceTests {
 
     private static func testSleepWakeAndStop() async throws {
         var polls = 0
-        let service = BatteryService(readProperties: { polls += 1; return properties })
+        let service = BatteryService(readProperties: {
+            polls += 1
+            return BatteryService.RegistryProperties(battery: properties)
+        })
         service.startPolling(interval: 0.03)
         service.startPolling(interval: 0.03)
         assert(polls == 1, "Starting twice must not add a second poller")
