@@ -8,6 +8,7 @@ enum ChargingBottleneck {
     case limitedByChargerOrCable(adapterW: Int, deliveringW: Int)
     case limitedByLaptop
     case slowingNearFull(soc: Int)
+    case finishingCharge
     case chargingNormally(adapterW: Int?)
     case notCharging
     case detecting
@@ -27,14 +28,14 @@ struct BatteryReading: Codable, Identifiable {
     let isCharging: Bool
     let externalConnected: Bool
     let cycleCount: Int
-    let temperature: Int        // deci-Kelvin
+    let temperature: Int?       // hundredths of a degree Celsius
     let avgTimeToFull: Int      // minutes, 65535 = N/A
     let avgTimeToEmpty: Int     // minutes, 65535 = N/A
-    let designCapacity: Int     // mAh
-    let nominalChargeCapacity: Int // mAh (current full capacity)
+    let designCapacity: Int?     // mAh
+    let nominalChargeCapacity: Int? // mAh (current full capacity)
 
     // PowerTelemetryData
-    let systemPowerIn: Int      // mW
+    let systemPowerIn: Int?     // mW; nil when input telemetry is unavailable
     let systemEnergyConsumed: Int // mW
     let batteryPower: Int64     // mW (signed)
 
@@ -55,8 +56,8 @@ struct BatteryReading: Codable, Identifiable {
 
     init(id: UUID, timestamp: Date, currentCapacity: Int, maxCapacity: Int, voltage: Int,
          amperage: Int, instantAmperage: Int, isCharging: Bool, externalConnected: Bool,
-         cycleCount: Int, temperature: Int, avgTimeToFull: Int, avgTimeToEmpty: Int,
-         designCapacity: Int, nominalChargeCapacity: Int, systemPowerIn: Int,
+         cycleCount: Int, temperature: Int?, avgTimeToFull: Int, avgTimeToEmpty: Int,
+         designCapacity: Int?, nominalChargeCapacity: Int?, systemPowerIn: Int?,
          systemEnergyConsumed: Int, batteryPower: Int64, adapterWatts: Int?,
          adapterName: String?, chargingCurrent: Int, slowChargingReason: Int,
          notChargingReason: Int, thermallyLimited: Int, adapterEfficiencyLoss: Int) {
@@ -88,12 +89,12 @@ struct BatteryReading: Codable, Identifiable {
         isCharging = try c.decode(Bool.self, forKey: .isCharging)
         externalConnected = try c.decode(Bool.self, forKey: .externalConnected)
         cycleCount = try c.decode(Int.self, forKey: .cycleCount)
-        temperature = try c.decode(Int.self, forKey: .temperature)
+        temperature = try c.decodeIfPresent(Int.self, forKey: .temperature)
         avgTimeToFull = try c.decode(Int.self, forKey: .avgTimeToFull)
         avgTimeToEmpty = try c.decode(Int.self, forKey: .avgTimeToEmpty)
-        designCapacity = try c.decode(Int.self, forKey: .designCapacity)
-        nominalChargeCapacity = try c.decode(Int.self, forKey: .nominalChargeCapacity)
-        systemPowerIn = try c.decode(Int.self, forKey: .systemPowerIn)
+        designCapacity = try c.decodeIfPresent(Int.self, forKey: .designCapacity)
+        nominalChargeCapacity = try c.decodeIfPresent(Int.self, forKey: .nominalChargeCapacity)
+        systemPowerIn = try c.decodeIfPresent(Int.self, forKey: .systemPowerIn)
         systemEnergyConsumed = try c.decode(Int.self, forKey: .systemEnergyConsumed)
         batteryPower = try c.decode(Int64.self, forKey: .batteryPower)
         // New fields — default to nil/0 for old data
@@ -113,7 +114,7 @@ struct BatteryReading: Codable, Identifiable {
     var chargeWatts: Double {
         guard externalConnected, isCharging else { return 0 }
         // Prefer PowerTelemetryData, fall back to V*A
-        if systemPowerIn > 0 {
+        if let systemPowerIn, systemPowerIn > 0 {
             return Double(systemPowerIn) / 1000.0
         }
         return abs(batteryChargeWatts)
@@ -124,10 +125,10 @@ struct BatteryReading: Codable, Identifiable {
         return Double(voltage) * Double(amperage) / 1_000_000.0
     }
 
-    var consumptionWatts: Double {
+    var consumptionWatts: Double? {
         if externalConnected {
             // On AC: system consumption = adapter power - battery charge power
-            let adapterW = Double(systemPowerIn) / 1000.0
+            guard let adapterW = deliveringWatts else { return nil }
             let batteryW = batteryChargeWatts // positive when charging
             return max(adapterW - batteryW, 0)
         } else {
@@ -136,8 +137,9 @@ struct BatteryReading: Codable, Identifiable {
         }
     }
 
-    var temperatureCelsius: Double {
-        Double(temperature) / 10.0 - 273.15
+    var temperatureCelsius: Double? {
+        guard let temperature, temperature > 0 else { return nil }
+        return Double(temperature) / 100.0
     }
 
     var voltageVolts: Double {
@@ -149,27 +151,27 @@ struct BatteryReading: Codable, Identifiable {
     }
 
     var timeRemainingMinutes: Int? {
-        if isCharging {
-            return avgTimeToFull == 65535 ? nil : avgTimeToFull
-        } else {
-            return avgTimeToEmpty == 65535 ? nil : avgTimeToEmpty
-        }
+        guard !isCharging || socPercent < 100 else { return nil }
+        let minutes = isCharging ? avgTimeToFull : avgTimeToEmpty
+        return (0..<65535).contains(minutes) ? minutes : nil
     }
 
-    var batteryHealth: Double {
-        guard designCapacity > 0 else { return 0 }
+    var batteryHealth: Double? {
+        guard let designCapacity, designCapacity > 0,
+              let nominalChargeCapacity, nominalChargeCapacity > 0 else { return nil }
         return Double(nominalChargeCapacity) / Double(designCapacity) * 100.0
     }
 
-    var deliveringWatts: Double {
-        Double(systemPowerIn) / 1000.0
+    var deliveringWatts: Double? {
+        guard let systemPowerIn, systemPowerIn >= 0 else { return nil }
+        return Double(systemPowerIn) / 1000.0
     }
 
     var chargingBottleneck: ChargingBottleneck {
         guard externalConnected else { return .none }
 
-        // Full and not charging
-        if socPercent >= 100 && !isCharging { return .none }
+        // The percentage can reach 100 before macOS clears its charging flag.
+        if socPercent >= 100 { return isCharging ? .finishingCharge : .none }
 
         // Connected but not charging at all
         if !isCharging && chargingCurrent == 0 {
@@ -186,11 +188,11 @@ struct BatteryReading: Codable, Identifiable {
         if socPercent > 80 { return .slowingNearFull(soc: socPercent) }
 
         // Check charger utilization
+        guard let delivering = deliveringWatts else { return .detecting }
         if let adapterW = adapterWatts, adapterW > 0 {
             if adapterW <= 30 {
                 return .limitedByCharger(adapterW: adapterW)
             }
-            let delivering = deliveringWatts
             // Ramp-up: delivering very little from a large adapter
             if delivering < 5 {
                 return .detecting

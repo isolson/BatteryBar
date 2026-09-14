@@ -11,7 +11,7 @@ enum TextLengthTests {
         print("All text length tests passed.")
     }
 
-    // Verdict line bottleneck text: must fit alongside time text in 250pt panel
+    // Verdict line bottleneck text: must fit alongside time text in 280pt panel
     // At .caption (~10pt), ~28 chars is the safe max for the left side
     private static func testBottleneckTexts() {
         let maxLen = 28
@@ -20,6 +20,7 @@ enum TextLengthTests {
             .limitedByChargerOrCable(adapterW: 140, deliveringW: 60),
             .limitedByLaptop,
             .slowingNearFull(soc: 95),
+            .finishingCharge,
             .chargingNormally(adapterW: 140),
             .chargingNormally(adapterW: nil),
             .notCharging,

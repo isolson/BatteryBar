@@ -1,0 +1,76 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "srgb:0.21961,0.25882,0.29020,1.00000",
+      "srgb:0.10196,0.12549,0.14902,1.00000"
+    ],
+    "orientation": {
+      "start": {
+        "x": 0.5,
+        "y": 0
+      },
+      "stop": {
+        "x": 0.5,
+        "y": 1
+      }
+    }
+  },
+  "groups": [
+    {
+      "name": "03 Bolt",
+      "layers": [
+        {
+          "image-name": "03-Bolt.svg",
+          "name": "Lightning bolt"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.15
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "name": "02 Battery",
+      "layers": [
+        {
+          "image-name": "02-Battery.svg",
+          "name": "Sage battery"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    },
+    {
+      "name": "01 Menu bar",
+      "layers": [
+        {
+          "image-name": "01-MenuBar.svg",
+          "name": "Menu bar"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.25
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.15
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

@@ -17,8 +17,8 @@ enum MenuBarRenderer {
             .baselineOffset: 1
         ]
 
-        if r.externalConnected && r.chargeWatts > 0 {
-            let num = BatteryFormatters.formatWattsNumber(r.chargeWatts, rounded: true)
+        if r.externalConnected {
+            let num = BatteryFormatters.formatWattsNumber(r.deliveringWatts, rounded: true)
             str.append(NSAttributedString(string: num, attributes: numAttrs))
             str.append(NSAttributedString(string: "w", attributes: unitAttrs))
             str.append(NSAttributedString(string: " \u{2192} ", attributes: numAttrs))
@@ -39,7 +39,7 @@ enum MenuBarRenderer {
         let pixelSize = NSSize(width: logicalSize.width * scale, height: logicalSize.height * scale)
 
         let image = NSImage(size: logicalSize)
-        let rep = NSBitmapImageRep(
+        guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(pixelSize.width),
             pixelsHigh: Int(pixelSize.height),
@@ -50,7 +50,7 @@ enum MenuBarRenderer {
             colorSpaceName: .deviceRGB,
             bytesPerRow: 0,
             bitsPerPixel: 0
-        )!
+        ) else { return image }
         rep.size = logicalSize
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)

@@ -94,7 +94,7 @@ private func extractSegments(_ readings: [BatteryReading], gapThreshold: TimeInt
             type = nil // gap = sleep, baseline only
         } else if r.isCharging && r.chargeWatts > 0.5 {
             type = .charging
-        } else if !r.externalConnected && r.consumptionWatts > 0.5 {
+        } else if !r.externalConnected && (r.consumptionWatts ?? 0) > 0.5 {
             type = .onBattery
         } else {
             type = nil // idle — baseline only
@@ -135,7 +135,7 @@ struct BatteryGraph: View {
 
         // Compute max values for normalization
         let maxChargeW = max(history.map { $0.chargeWatts }.max() ?? 1, 1)
-        let maxConsumptionW = max(history.map { $0.consumptionWatts }.max() ?? 1, 1)
+        let maxConsumptionW = max(history.compactMap { $0.consumptionWatts }.max() ?? 1, 1)
 
         // Empty chart for axis labels + coordinate system
         Chart {
@@ -164,15 +164,18 @@ struct BatteryGraph: View {
                 let plotFrame = geo[proxy.plotAreaFrame]
 
                 // Convert data points to screen coordinates
-                let screenPoints: [CGPoint] = history.enumerated().compactMap { i, r in
+                // Keep one slot per reading; a missing chart coordinate must not shift indices.
+                let screenPoints: [CGPoint?] = history.enumerated().map { i, r in
                     guard let x = proxy.position(forX: r.timestamp),
-                          let y = proxy.position(forY: smoothed[i]) else { return nil }
+                          let y = proxy.position(forY: smoothed[i]),
+                          x.isFinite, y.isFinite else { return nil }
                     return CGPoint(x: plotFrame.origin.x + x, y: plotFrame.origin.y + y)
                 }
 
                 // Layer 1 (back): Baseline SOC curve — constant width, always drawn
-                if screenPoints.count >= 2 {
-                    catmullRomPath(screenPoints)
+                let baselinePoints = screenPoints.compactMap { $0 }
+                if baselinePoints.count >= 2 {
+                    catmullRomPath(baselinePoints)
                         .stroke(
                             sleepIndigo,
                             style: StrokeStyle(lineWidth: baseWidth, lineCap: .round, lineJoin: .round)
@@ -193,22 +196,24 @@ struct BatteryGraph: View {
                         case .onBattery:
                             // Draw individual bars at each data point
                             for idx in seg.startIndex...seg.endIndex {
-                                let pt = screenPoints[idx]
+                                guard let pt = screenPoints[idx] else { continue }
                                 let r = history[idx]
-                                let ratio = CGFloat(min(r.consumptionWatts / maxConsumptionW, 1.0))
+                                guard let consumption = r.consumptionWatts else { continue }
+                                let ratio = CGFloat(min(consumption / maxConsumptionW, 1.0))
                                 let barHeight = max(ratio * maxBarHeight, 2)
 
                                 // Bar width: fill the gap to the next point (or from previous)
                                 let leftX: CGFloat
                                 let rightX: CGFloat
-                                if idx > seg.startIndex && idx < seg.endIndex {
-                                    leftX = (screenPoints[idx - 1].x + pt.x) / 2
-                                    rightX = (pt.x + screenPoints[idx + 1].x) / 2
-                                } else if idx > seg.startIndex {
-                                    leftX = (screenPoints[idx - 1].x + pt.x) / 2
+                                if idx > seg.startIndex && idx < seg.endIndex,
+                                   let previous = screenPoints[idx - 1], let next = screenPoints[idx + 1] {
+                                    leftX = (previous.x + pt.x) / 2
+                                    rightX = (pt.x + next.x) / 2
+                                } else if idx > seg.startIndex, let previous = screenPoints[idx - 1] {
+                                    leftX = (previous.x + pt.x) / 2
                                     rightX = pt.x + (pt.x - leftX)
-                                } else if idx < seg.endIndex {
-                                    rightX = (pt.x + screenPoints[idx + 1].x) / 2
+                                } else if idx < seg.endIndex, let next = screenPoints[idx + 1] {
+                                    rightX = (pt.x + next.x) / 2
                                     leftX = pt.x - (rightX - pt.x)
                                 } else {
                                     leftX = pt.x - 2
@@ -228,21 +233,22 @@ struct BatteryGraph: View {
                         case .charging:
                             // Draw individual bars going UP from SOC line
                             for idx in seg.startIndex...seg.endIndex {
-                                let pt = screenPoints[idx]
+                                guard let pt = screenPoints[idx] else { continue }
                                 let r = history[idx]
                                 let ratio = CGFloat(min(r.chargeWatts / maxChargeW, 1.0))
                                 let barHeight = max(ratio * maxBarHeight, 2)
 
                                 let leftX: CGFloat
                                 let rightX: CGFloat
-                                if idx > seg.startIndex && idx < seg.endIndex {
-                                    leftX = (screenPoints[idx - 1].x + pt.x) / 2
-                                    rightX = (pt.x + screenPoints[idx + 1].x) / 2
-                                } else if idx > seg.startIndex {
-                                    leftX = (screenPoints[idx - 1].x + pt.x) / 2
+                                if idx > seg.startIndex && idx < seg.endIndex,
+                                   let previous = screenPoints[idx - 1], let next = screenPoints[idx + 1] {
+                                    leftX = (previous.x + pt.x) / 2
+                                    rightX = (pt.x + next.x) / 2
+                                } else if idx > seg.startIndex, let previous = screenPoints[idx - 1] {
+                                    leftX = (previous.x + pt.x) / 2
                                     rightX = pt.x + (pt.x - leftX)
-                                } else if idx < seg.endIndex {
-                                    rightX = (pt.x + screenPoints[idx + 1].x) / 2
+                                } else if idx < seg.endIndex, let next = screenPoints[idx + 1] {
+                                    rightX = (pt.x + next.x) / 2
                                     leftX = pt.x - (rightX - pt.x)
                                 } else {
                                     leftX = pt.x - 2

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="background" x2="0" y2="1"><stop stop-color="#38424A" /><stop offset="1" stop-color="#1A2026" /></linearGradient>
+  <linearGradient id="sage" x2="0" y2="1"><stop stop-color="#BFCDB8" /><stop offset="0.5" stop-color="#9BAE95" /><stop offset="1" stop-color="#7F9475" /></linearGradient>
+  <linearGradient id="menu" x2="0" y2="1"><stop stop-color="#7D8790" /><stop offset="1" stop-color="#4B555E" /></linearGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur in="SourceAlpha" stdDeviation="14" /><feOffset dy="12" /><feComponentTransfer><feFuncA type="linear" slope="0.3" /></feComponentTransfer><feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+  <style>.battery-body {fill:url(#sage);stroke:#BCCAB5;stroke-width:4}.menu-strip {fill:url(#menu);stroke:#8C969E;stroke-width:2}</style>
+</defs>
+<rect x="96" y="96" width="832" height="832" rx="184" fill="url(#background)" stroke="#59616A" stroke-width="2" />
+<g transform="translate(96 96) scale(0.8125)"><g filter="url(#shadow)"><rect class="menu-strip" x="72" y="126" width="880" height="120" rx="60" fill="#626C74" />
+  <circle cx="148" cy="186" r="20" fill="#B9BFC4" />
+  <circle cx="216" cy="186" r="20" fill="#B9BFC4" />
+  <circle cx="284" cy="186" r="20" fill="#9BAE95" />
+  <rect x="708" y="173" width="76" height="26" rx="13" fill="#B9BFC4" />
+  <rect x="812" y="173" width="76" height="26" rx="13" fill="#B9BFC4" />
+</g><g filter="url(#shadow)"><path class="battery-body" fill="#9BAE95" d="M218 354 H754 Q848 354 848 448 V466 H872 Q920 466 920 514 V594 Q920 642 872 642 H848 V660 Q848 754 754 754 H218 Q124 754 124 660 V448 Q124 354 218 354 Z" />
+</g><g filter="url(#shadow)"><path fill="#F5F3EB" d="M556 411 Q572 395 567 416 L530 526 H608 Q624 526 613 540 L453 707 Q437 723 443 700 L478 589 H402 Q386 589 397 574 Z" />
+</g></g></svg>

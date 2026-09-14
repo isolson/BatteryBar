@@ -2,25 +2,23 @@ import Foundation
 
 /// Downsample readings to a target count while preserving peaks and valleys.
 func downsampleForDisplay(_ readings: [BatteryReading], targetCount: Int = 200) -> [BatteryReading] {
+    guard targetCount > 0 else { return [] }
     guard readings.count > targetCount else { return readings }
-
-    let step = Double(readings.count) / Double(targetCount)
-    var result: [BatteryReading] = []
+    guard targetCount > 1 else { return [readings[readings.count - 1]] }
 
     // Always keep first and last
-    result.append(readings[0])
-
-    var i = 1
-    while i < readings.count - 1 {
-        let nextI = min(Int(Double(result.count) * step), readings.count - 2)
-        if nextI <= i { i += 1; continue }
-
-        // In this window, find the point to keep
-        let window = Array(readings[i...nextI])
-        if let best = selectRepresentative(window, prev: readings[i - 1], next: readings[min(nextI + 1, readings.count - 1)]) {
-            result.append(best)
+    var result = [readings[0]]
+    let interiorCount = readings.count - 2
+    let bucketCount = targetCount - 2
+    if bucketCount > 0 {
+        for bucket in 0..<bucketCount {
+            let start = 1 + bucket * interiorCount / bucketCount
+            let end = 1 + (bucket + 1) * interiorCount / bucketCount
+            let window = Array(readings[start..<end])
+            if let best = selectRepresentative(window, prev: readings[start - 1], next: readings[end]) {
+                result.append(best)
+            }
         }
-        i = nextI + 1
     }
 
     result.append(readings[readings.count - 1])
@@ -43,21 +41,22 @@ private func selectRepresentative(_ window: [BatteryReading], prev: BatteryReadi
     }
 
     // Find max and min consumption in window
-    var maxCons = window[0], minCons = window[0]
-    for r in window {
-        if r.consumptionWatts > maxCons.consumptionWatts { maxCons = r }
-        if r.consumptionWatts < minCons.consumptionWatts { minCons = r }
+    let measured = window.compactMap { reading in
+        reading.consumptionWatts.map { (reading: reading, watts: $0) }
     }
-
-    let avgPrevNext = (prev.consumptionWatts + next.consumptionWatts) / 2.0
+    guard let maxCons = measured.max(by: { $0.watts < $1.watts }),
+          let minCons = measured.min(by: { $0.watts < $1.watts }),
+          let previousWatts = prev.consumptionWatts,
+          let nextWatts = next.consumptionWatts else { return window[window.count / 2] }
+    let avgPrevNext = (previousWatts + nextWatts) / 2.0
 
     // If there's a significant peak, keep it
-    if maxCons.consumptionWatts > avgPrevNext * 1.3 {
-        return maxCons
+    if maxCons.watts > avgPrevNext * 1.3 {
+        return maxCons.reading
     }
     // If there's a significant valley, keep it
-    if minCons.consumptionWatts < avgPrevNext * 0.7 {
-        return minCons
+    if minCons.watts < avgPrevNext * 0.7 {
+        return minCons.reading
     }
     // Otherwise keep the middle point
     return window[window.count / 2]

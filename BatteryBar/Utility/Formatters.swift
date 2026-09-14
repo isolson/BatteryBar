@@ -2,12 +2,13 @@ import Foundation
 import SwiftUI
 
 enum BatteryFormatters {
-    static func formatTemperature(_ celsius: Double) -> String {
-        String(format: "%.1f°C", celsius)
+    static func formatTemperature(_ celsius: Double?) -> String {
+        guard let celsius, celsius.isFinite else { return "Unavailable" }
+        return String(format: "%.1f°C", celsius)
     }
 
     static func formatTimeRemaining(_ minutes: Int?) -> String {
-        guard let minutes = minutes else { return "--" }
+        guard let minutes, (0..<65535).contains(minutes) else { return "--" }
         if minutes < 60 {
             return "\(minutes)m"
         }
@@ -15,7 +16,8 @@ enum BatteryFormatters {
         return String(format: "%.1fh", hours)
     }
 
-    static func formatWattsNumber(_ watts: Double, rounded: Bool = false) -> String {
+    static func formatWattsNumber(_ watts: Double?, rounded: Bool = false) -> String {
+        guard let watts, watts.isFinite else { return "--" }
         if rounded || watts >= 10 {
             return String(format: "%.0f", watts)
         } else {
@@ -23,7 +25,8 @@ enum BatteryFormatters {
         }
     }
 
-    static func formatWatts(_ watts: Double) -> String {
+    static func formatWatts(_ watts: Double?) -> String {
+        guard let watts, watts.isFinite else { return "Unavailable" }
         return formatWattsNumber(watts) + "W"
     }
 
@@ -35,8 +38,9 @@ enum BatteryFormatters {
         String(format: "%.2fA", amps)
     }
 
-    static func formatHealth(_ health: Double) -> String {
-        String(format: "%.0f%%", health)
+    static func formatHealth(_ health: Double?) -> String {
+        guard let health, health.isFinite else { return "Unavailable" }
+        return String(format: "%.0f%%", health)
     }
 
     static func bottleneckText(_ bottleneck: ChargingBottleneck) -> String {
@@ -49,6 +53,8 @@ enum BatteryFormatters {
             return "Paused \u{2014} too warm"
         case .slowingNearFull:
             return "Slowing near full"
+        case .finishingCharge:
+            return "Finishing charge"
         case .chargingNormally:
             return "Charging at full speed"
         case .notCharging:
@@ -66,7 +72,7 @@ enum BatteryFormatters {
             return .yellow
         case .limitedByLaptop:
             return .orange
-        case .slowingNearFull, .notCharging, .detecting:
+        case .slowingNearFull, .finishingCharge, .notCharging, .detecting:
             return .gray
         case .chargingNormally:
             return .green

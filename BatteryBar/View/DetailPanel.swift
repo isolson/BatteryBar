@@ -4,17 +4,14 @@ struct DetailPanel: View {
     @ObservedObject var appState: AppState
     @ObservedObject var updateChecker: UpdateChecker
     @State private var showDetails = true
+    @StateObject private var energyMonitor = EnergyHogMonitor()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let r = appState.smoothedReading {
-                // Flow diagram header + verdict
-                VStack(spacing: 6) {
-                    flowDiagram(r)
-                    verdictLine(r)
-                }
-                .padding(8)
-                .background(
+                flowDiagram(r)
+                    .padding(8)
+                    .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(.white.opacity(0.04))
                             .overlay(
@@ -22,6 +19,8 @@ struct DetailPanel: View {
                                     .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
                             )
                     )
+
+                verdictLine(r)
 
                 // Collapsible details
                 HStack {
@@ -48,7 +47,7 @@ struct DetailPanel: View {
                     .font(.caption)
 
                     // Energy-hungry apps
-                    let hogs = topEnergyApps()
+                    let hogs = energyMonitor.hogs
                     if !hogs.isEmpty {
                         Divider()
                         VStack(alignment: .leading, spacing: 4) {
@@ -76,7 +75,7 @@ struct DetailPanel: View {
                 }
 
             } else {
-                Text("No Battery")
+                Text("Battery data unavailable")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -115,82 +114,73 @@ struct DetailPanel: View {
             }
         }
         .padding(10)
-        .frame(width: 250)
+        .frame(width: 280)
+        .fixedSize(horizontal: false, vertical: true)
+        .task(id: showDetails) {
+            if showDetails { await energyMonitor.poll() }
+        }
     }
 
     // MARK: - Flow Diagram
 
     @ViewBuilder
     private func flowDiagram(_ r: BatteryReading) -> some View {
-        let showCharger = r.externalConnected && r.chargeWatts > 0
+        let showCharger = r.externalConnected
 
-        HStack(spacing: 0) {
-            if showCharger {
-                VStack(spacing: 1) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 14))
-                        Text(BatteryFormatters.formatWatts(r.chargeWatts))
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                    }
-                    .foregroundStyle(.green)
+        Grid(horizontalSpacing: 4, verticalSpacing: 1) {
+            GridRow(alignment: .firstTextBaseline) {
+                if showCharger {
+                    flowPowerValue(icon: "bolt.fill", watts: r.deliveringWatts,
+                                   description: "Power supplied by the connected charger")
+                        .foregroundStyle(.green)
+                    flowArrow
+                }
+
+                flowValue(icon: batteryIcon(r.socPercent), value: "\(r.socPercent)%")
+                    .help("Current battery charge level")
+                flowArrow
+                flowPowerValue(icon: "cpu", watts: r.consumptionWatts,
+                               description: "Power being used by the laptop right now")
+                    .foregroundStyle(.orange)
+            }
+
+            GridRow {
+                if showCharger {
                     Text(r.adapterWatts.map { "\($0)W Charger" } ?? "Charger")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                 }
-                .frame(maxWidth: .infinity)
-                .help("Power flowing from the charger to the battery")
-
-                Text("\u{2192}")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .frame(maxHeight: .infinity)
-            } else {
-                Spacer()
-            }
-
-            VStack(spacing: 1) {
-                HStack(spacing: 3) {
-                    Image(systemName: batteryIcon(r.socPercent))
-                        .font(.system(size: 14))
-                    Text("\(r.socPercent)%")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                }
-                .fixedSize()
                 Text("Battery")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity)
-            .help("Current battery charge level")
-
-            Text("\u{2192}")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-                .frame(maxHeight: .infinity)
-
-            VStack(spacing: 1) {
-                HStack(spacing: 3) {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 14))
-                    Text(BatteryFormatters.formatWatts(r.consumptionWatts))
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                }
-                .foregroundStyle(.orange)
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                 Text("System")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
             }
-            .frame(maxWidth: .infinity)
-            .help("Power being used by the laptop right now")
+            .font(.system(size: 9))
+            .foregroundStyle(.tertiary)
         }
+        .lineLimit(1)
+        .fixedSize()
+        .frame(maxWidth: .infinity)
+    }
+
+    private func flowPowerValue(icon: String, watts: Double?, description: String) -> some View {
+        flowValue(icon: icon, value: watts.map { BatteryFormatters.formatWatts($0) } ?? "--")
+            .help(watts == nil ? "Power measurement unavailable" : description)
+    }
+
+    private func flowValue(icon: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+            Text(value)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+        }
+    }
+
+    private var flowArrow: some View {
+        Image(systemName: "arrow.right")
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
     }
 
     // MARK: - Verdict Line
@@ -219,7 +209,7 @@ struct DetailPanel: View {
             } else if !r.externalConnected {
                 Text("On Battery")
                     .foregroundStyle(.secondary)
-            } else if r.socPercent >= 99 {
+            } else if r.socPercent >= 100 {
                 Text("Fully Charged")
                     .foregroundStyle(.secondary)
             }

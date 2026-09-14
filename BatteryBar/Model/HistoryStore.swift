@@ -8,16 +8,20 @@ class HistoryStore: ObservableObject {
     private var saveTimer: Timer?
     private var resignObserver: Any?
     private var lastGraphUpdate: Date = .distantPast
+    private var canSaveHistory = true
 
     // 7 days max. Downsampling keeps this manageable:
     // ~720 (1h@5s) + ~1380 (23h@1min) + ~1728 (6d@5min) ≈ 3828 max
     private let maxAge: TimeInterval = 7 * 24 * 3600
+    private let maxReadings = 10_000
+    private let maxFileSize = 16 * 1024 * 1024
 
-    init() {
+    init(persistenceURL: URL? = nil) {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appDir = appSupport.appendingPathComponent("BatteryBar")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        persistenceURL = appDir.appendingPathComponent("history.json")
+        self.persistenceURL = persistenceURL ?? appSupport.appendingPathComponent("BatteryBar/history.json")
+        try? FileManager.default.createDirectory(
+            at: self.persistenceURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
         loadFromDisk()
         startPeriodicSave()
 
@@ -30,7 +34,10 @@ class HistoryStore: ObservableObject {
     }
 
     func append(_ reading: BatteryReading) {
+        guard isValid(reading, now: Date()) else { return }
+        let outOfOrder = readings.last.map { $0.timestamp > reading.timestamp } ?? false
         readings.append(reading)
+        if outOfOrder { readings.sort { $0.timestamp < $1.timestamp } }
         pruneAndDownsample()
         updateGraphReadingsIfNeeded()
     }
@@ -44,6 +51,8 @@ class HistoryStore: ObservableObject {
     }
 
     func saveToDisk() {
+        // Never replace the user's only copy if preserving a damaged file failed.
+        guard canSaveHistory else { return }
         do {
             let data = try JSONEncoder().encode(readings)
             try data.write(to: persistenceURL, options: .atomic)
@@ -82,12 +91,13 @@ class HistoryStore: ObservableObject {
         let now = Date()
 
         // Remove anything older than 7 days
-        readings.removeAll { now.timeIntervalSince($0.timestamp) > maxAge }
+        readings.removeAll { !isValid($0, now: now) || now.timeIntervalSince($0.timestamp) > maxAge }
 
         // Downsample: entries older than 24h → keep 1 per 5min
         downsampleRange(olderThan: 24 * 3600, interval: 300, now: now)
         // Entries older than 1h → keep 1 per 1min
         downsampleRange(olderThan: 3600, interval: 60, now: now)
+        if readings.count > maxReadings { readings.removeFirst(readings.count - maxReadings) }
     }
 
     private func downsampleRange(olderThan ageThreshold: TimeInterval, interval: TimeInterval, now: Date) {
@@ -113,7 +123,6 @@ class HistoryStore: ObservableObject {
         buckets.append(currentBucket)
 
         // For each bucket with multiple entries, keep only the one closest to bucket midpoint
-        // But also keep any local peaks/valleys
         var indicesToRemove = Set<Int>()
         for bucket in buckets where bucket.count > 1 {
             let keepIdx = bucket[bucket.count / 2] // keep middle entry
@@ -140,13 +149,51 @@ class HistoryStore: ObservableObject {
     private func loadFromDisk() {
         guard FileManager.default.fileExists(atPath: persistenceURL.path) else { return }
         do {
+            // Query the file itself; URL resource values can retain an earlier file size.
+            let attributes = try FileManager.default.attributesOfItem(atPath: persistenceURL.path)
+            guard attributes[.type] as? FileAttributeType == .typeRegular,
+                  (attributes[.size] as? UInt64 ?? 0) <= UInt64(maxFileSize) else {
+                canSaveHistory = false
+                print("BatteryBar: History is too large or is not a regular file; kept the original file.")
+                return
+            }
             let data = try Data(contentsOf: persistenceURL)
-            let loaded = try JSONDecoder().decode([BatteryReading].self, from: data)
-            let cutoff = Date().addingTimeInterval(-maxAge)
-            readings = loaded.filter { $0.timestamp > cutoff }
+            let loaded = try JSONDecoder().decode([HistoryEntry].self, from: data)
+            let now = Date()
+            let valid = loaded.compactMap(\.reading).filter { isValid($0, now: now) }
+            if valid.count != loaded.count { preserveInvalidHistory() }
+            readings = valid.sorted { $0.timestamp < $1.timestamp }
+            pruneAndDownsample()
             updateGraphReadingsIfNeeded()
         } catch {
+            preserveInvalidHistory()
             print("BatteryBar: Failed to load history: \(error)")
+        }
+    }
+
+    private struct HistoryEntry: Decodable {
+        let reading: BatteryReading?
+
+        init(from decoder: Decoder) throws {
+            reading = try? BatteryReading(from: decoder)
+        }
+    }
+
+    private func isValid(_ reading: BatteryReading, now: Date) -> Bool {
+        reading.timestamp.timeIntervalSinceReferenceDate.isFinite
+            && reading.timestamp <= now.addingTimeInterval(60)
+            && (0...100).contains(reading.socPercent)
+    }
+
+    private func preserveInvalidHistory() {
+        let backup = persistenceURL.deletingPathExtension()
+            .appendingPathExtension("unreadable-\(UUID().uuidString).json")
+        do {
+            try FileManager.default.copyItem(at: persistenceURL, to: backup)
+            print("BatteryBar: Preserved the original history as \(backup.lastPathComponent).")
+        } catch {
+            canSaveHistory = false
+            print("BatteryBar: Cannot preserve unreadable history; automatic saves are disabled.")
         }
     }
 

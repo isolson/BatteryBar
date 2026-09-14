@@ -20,13 +20,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 270, height: 380)
         popover.behavior = .transient
         let checker = updateChecker
-        popover.contentViewController = NSHostingController(
+        let panelController = NSHostingController(
             rootView: DetailPanel(appState: appState, updateChecker: updateChecker)
                 .task { await checker.checkIfNeeded() }
         )
+
+        panelController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = panelController
 
         cancellable = appState.$smoothedReading
             .receive(on: DispatchQueue.main)
@@ -60,92 +62,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        appState.prepareForTermination()
         CrashGuard.markCleanExit()
+        appState.prepareForTermination()
     }
 }
 
 @main
-struct BatteryBarApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    init() {
+enum BatteryBarMain {
+    @MainActor
+    static func main() {
+        // Recovery helpers must not create app state or write battery history.
         CrashGuard.handleHelperInvocationIfNeeded()
-    }
-
-    var body: some Scene {
-        Settings { EmptyView() }
+        BatteryBarApp.main()
     }
 }
 
-class AppState: ObservableObject {
-    @Published var latestReading: BatteryReading?
-    @Published var history: [BatteryReading] = []
-    let historyStore = HistoryStore()
+struct BatteryBarApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    /// 3-point rolling average for menu bar display
-    @Published var smoothedReading: BatteryReading?
-    private var recentReadings: [BatteryReading] = []
-
-    private let batteryService = BatteryService()
-    private var cancellables = Set<AnyCancellable>()
-
-    init() {
-        batteryService.$latestReading
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] reading in
-                guard let self = self, let reading = reading else { return }
-                self.latestReading = reading
-                self.historyStore.append(reading)
-                self.updateSmoothed(reading)
-            }
-            .store(in: &cancellables)
-
-        historyStore.$readings
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$history)
-    }
-
-    func start() {
-        batteryService.startPolling()
-    }
-
-    private func updateSmoothed(_ reading: BatteryReading) {
-        recentReadings.append(reading)
-        if recentReadings.count > 3 { recentReadings.removeFirst() }
-
-        // Create a smoothed copy by averaging the power telemetry values
-        smoothedReading = BatteryReading(
-            id: reading.id,
-            timestamp: reading.timestamp,
-            currentCapacity: reading.currentCapacity,
-            maxCapacity: reading.maxCapacity,
-            voltage: reading.voltage,
-            amperage: Int(recentReadings.map { Double($0.amperage) }.reduce(0, +) / Double(recentReadings.count)),
-            instantAmperage: reading.instantAmperage,
-            isCharging: reading.isCharging,
-            externalConnected: reading.externalConnected,
-            cycleCount: reading.cycleCount,
-            temperature: reading.temperature,
-            avgTimeToFull: reading.avgTimeToFull,
-            avgTimeToEmpty: reading.avgTimeToEmpty,
-            designCapacity: reading.designCapacity,
-            nominalChargeCapacity: reading.nominalChargeCapacity,
-            systemPowerIn: Int(recentReadings.map { Double($0.systemPowerIn) }.reduce(0, +) / Double(recentReadings.count)),
-            systemEnergyConsumed: reading.systemEnergyConsumed,
-            batteryPower: reading.batteryPower,
-            adapterWatts: reading.adapterWatts,
-            adapterName: reading.adapterName,
-            chargingCurrent: reading.chargingCurrent,
-            slowChargingReason: reading.slowChargingReason,
-            notChargingReason: reading.notChargingReason,
-            thermallyLimited: reading.thermallyLimited,
-            adapterEfficiencyLoss: reading.adapterEfficiencyLoss
-        )
-    }
-
-    func prepareForTermination() {
-        batteryService.stopPolling()
-        historyStore.saveToDisk()
+    var body: some Scene {
+        Settings { EmptyView() }
     }
 }
