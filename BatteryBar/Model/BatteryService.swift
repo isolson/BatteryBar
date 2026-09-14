@@ -10,6 +10,11 @@ class BatteryService: ObservableObject {
     private var sleepObserver: Any?
     private var wakeObserver: Any?
     private var isPolling = false
+    private let readProperties: () -> [String: Any]?
+
+    init(readProperties: @escaping () -> [String: Any]? = BatteryService.readRegistryProperties) {
+        self.readProperties = readProperties
+    }
 
     func startPolling(interval: TimeInterval = 5.0) {
         guard !isPolling else { return }
@@ -58,25 +63,40 @@ class BatteryService: ObservableObject {
         }
     }
 
-    private func readBattery() {
-        let serviceMatch = IOServiceMatching("AppleSmartBattery")
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, serviceMatch)
-        guard service != IO_OBJECT_NULL else {
-            DispatchQueue.main.async { self.latestReading = nil }
-            return
-        }
+    // Polling and publication run on the main run loop.
+    func readBattery() {
+        latestReading = readProperties().flatMap { Self.reading(from: $0) }
+    }
+
+    static func readRegistryProperties() -> [String: Any]? {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard service != IO_OBJECT_NULL else { return nil }
         defer { IOObjectRelease(service) }
 
         var propsUnmanaged: Unmanaged<CFMutableDictionary>?
         let result = IORegistryEntryCreateCFProperties(service, &propsUnmanaged, kCFAllocatorDefault, 0)
-        guard result == KERN_SUCCESS,
-              let props = propsUnmanaged?.takeRetainedValue() as? [String: Any] else { return }
+        let properties = propsUnmanaged?.takeRetainedValue()
+        guard result == KERN_SUCCESS else { return nil }
+        return properties as? [String: Any]
+    }
+
+    static func reading(from props: [String: Any]) -> BatteryReading? {
+        guard props["BatteryInstalled"] as? Bool != false,
+              let currentCapacity = props["CurrentCapacity"] as? Int,
+              (0...100).contains(currentCapacity) else { return nil }
+
+        let batteryData = props["BatteryData"] as? [String: Any]
+        func measurement(_ key: String) -> Int? {
+            if let value = props[key] as? Int, value > 0 { return value }
+            if let value = batteryData?[key] as? Int, value > 0 { return value }
+            return nil
+        }
 
         let telemetry = props["PowerTelemetryData"] as? [String: Any]
         let chargerData = props["ChargerData"] as? [String: Any]
 
-        let rawBatteryPower = telemetry?["BatteryPower"] as? UInt64 ?? 0
-        let signedBatteryPower = Int64(bitPattern: rawBatteryPower)
+        let signedBatteryPower = telemetry?["BatteryPower"] as? Int64
+            ?? Int64(bitPattern: telemetry?["BatteryPower"] as? UInt64 ?? 0)
 
         // Adapter details: array of dicts, take first entry
         var adapterWatts: Int? = nil
@@ -87,10 +107,10 @@ class BatteryService: ObservableObject {
             adapterName = first["Description"] as? String ?? first["Name"] as? String
         }
 
-        let reading = BatteryReading(
+        return BatteryReading(
             id: UUID(),
             timestamp: Date(),
-            currentCapacity: props["CurrentCapacity"] as? Int ?? 0,
+            currentCapacity: currentCapacity,
             maxCapacity: props["MaxCapacity"] as? Int ?? 100,
             voltage: props["Voltage"] as? Int ?? 0,
             amperage: props["Amperage"] as? Int ?? 0,
@@ -98,11 +118,11 @@ class BatteryService: ObservableObject {
             isCharging: props["IsCharging"] as? Bool ?? false,
             externalConnected: props["ExternalConnected"] as? Bool ?? false,
             cycleCount: props["CycleCount"] as? Int ?? 0,
-            temperature: props["Temperature"] as? Int ?? 0,
+            temperature: measurement("Temperature"),
             avgTimeToFull: props["AvgTimeToFull"] as? Int ?? 65535,
             avgTimeToEmpty: props["AvgTimeToEmpty"] as? Int ?? 65535,
-            designCapacity: props["DesignCapacity"] as? Int ?? 0,
-            nominalChargeCapacity: props["NominalChargeCapacity"] as? Int ?? 0,
+            designCapacity: measurement("DesignCapacity"),
+            nominalChargeCapacity: measurement("NominalChargeCapacity"),
             systemPowerIn: telemetry?["SystemPowerIn"] as? Int ?? 0,
             systemEnergyConsumed: telemetry?["SystemEnergyConsumed"] as? Int ?? 0,
             batteryPower: signedBatteryPower,
@@ -114,10 +134,6 @@ class BatteryService: ObservableObject {
             thermallyLimited: chargerData?["TimeChargingThermallyLimited"] as? Int ?? 0,
             adapterEfficiencyLoss: telemetry?["AdapterEfficiencyLoss"] as? Int ?? 0
         )
-
-        DispatchQueue.main.async {
-            self.latestReading = reading
-        }
     }
 
     deinit {

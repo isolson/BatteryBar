@@ -1,0 +1,30 @@
+name: Build and test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check Apple Silicon toolchain
+        run: |
+          test "$(uname -m)" = arm64
+          sw_vers
+          xcrun swiftc --version
+      - name: Test and build
+        run: make test build
+      - name: Check packaging and release safeguards
+        run: bash scripts/test-release.sh

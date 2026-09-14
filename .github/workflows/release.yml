@@ -1,0 +1,80 @@
+name: Prepare release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      SIGNING_IDENTITY: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+      NOTARY_PROFILE: batterybar-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check release revision
+        run: |
+          test "$(uname -m)" = arm64
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' BatteryBar/Resources/Info.plist)
+          test "$RELEASE_TAG" = "v$version"
+          echo "NOTARY_KEYCHAIN=$RUNNER_TEMP/batterybar-signing.keychain-db" >> "$GITHUB_ENV"
+      - name: Set up signing
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in SIGNING_IDENTITY CERTIFICATE_BASE64 CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "Required release credential is missing: $name" >&2
+              exit 1
+            fi
+          done
+          certificate="$RUNNER_TEMP/batterybar-signing.p12"
+          printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$certificate"
+          keychain_password=$(openssl rand -hex 24)
+          printf '::add-mask::%s\n' "$keychain_password"
+          security create-keychain -p "$keychain_password" "$NOTARY_KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$NOTARY_KEYCHAIN"
+          security unlock-keychain -p "$keychain_password" "$NOTARY_KEYCHAIN"
+          security import "$certificate" -P "$CERTIFICATE_PASSWORD" -t cert -f pkcs12 \
+            -k "$NOTARY_KEYCHAIN" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -k "$keychain_password" "$NOTARY_KEYCHAIN"
+          security list-keychains -d user -s "$NOTARY_KEYCHAIN"
+          xcrun notarytool store-credentials "$NOTARY_PROFILE" --keychain "$NOTARY_KEYCHAIN" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD"
+      - name: Build, sign, notarize, and verify
+        run: make release
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --draft \
+            --title "BatteryBar $RELEASE_TAG" --notes-file docs/release-notes.md \
+            dist/BatteryBar.app.zip dist/BatteryBar.app.zip.sha256
+      - name: Remove signing credentials
+        if: always()
+        run: |
+          keychain="${NOTARY_KEYCHAIN:-}"
+          if [[ -n "$keychain" && -f "$keychain" ]]; then
+            security delete-keychain "$keychain"
+          fi
+          rm -f "$RUNNER_TEMP/batterybar-signing.p12"

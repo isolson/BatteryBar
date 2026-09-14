@@ -27,11 +27,11 @@ struct BatteryReading: Codable, Identifiable {
     let isCharging: Bool
     let externalConnected: Bool
     let cycleCount: Int
-    let temperature: Int        // deci-Kelvin
+    let temperature: Int?        // deci-Kelvin
     let avgTimeToFull: Int      // minutes, 65535 = N/A
     let avgTimeToEmpty: Int     // minutes, 65535 = N/A
-    let designCapacity: Int     // mAh
-    let nominalChargeCapacity: Int // mAh (current full capacity)
+    let designCapacity: Int?     // mAh
+    let nominalChargeCapacity: Int? // mAh (current full capacity)
 
     // PowerTelemetryData
     let systemPowerIn: Int      // mW
@@ -55,8 +55,8 @@ struct BatteryReading: Codable, Identifiable {
 
     init(id: UUID, timestamp: Date, currentCapacity: Int, maxCapacity: Int, voltage: Int,
          amperage: Int, instantAmperage: Int, isCharging: Bool, externalConnected: Bool,
-         cycleCount: Int, temperature: Int, avgTimeToFull: Int, avgTimeToEmpty: Int,
-         designCapacity: Int, nominalChargeCapacity: Int, systemPowerIn: Int,
+         cycleCount: Int, temperature: Int?, avgTimeToFull: Int, avgTimeToEmpty: Int,
+         designCapacity: Int?, nominalChargeCapacity: Int?, systemPowerIn: Int,
          systemEnergyConsumed: Int, batteryPower: Int64, adapterWatts: Int?,
          adapterName: String?, chargingCurrent: Int, slowChargingReason: Int,
          notChargingReason: Int, thermallyLimited: Int, adapterEfficiencyLoss: Int) {
@@ -88,11 +88,11 @@ struct BatteryReading: Codable, Identifiable {
         isCharging = try c.decode(Bool.self, forKey: .isCharging)
         externalConnected = try c.decode(Bool.self, forKey: .externalConnected)
         cycleCount = try c.decode(Int.self, forKey: .cycleCount)
-        temperature = try c.decode(Int.self, forKey: .temperature)
+        temperature = try c.decodeIfPresent(Int.self, forKey: .temperature)
         avgTimeToFull = try c.decode(Int.self, forKey: .avgTimeToFull)
         avgTimeToEmpty = try c.decode(Int.self, forKey: .avgTimeToEmpty)
-        designCapacity = try c.decode(Int.self, forKey: .designCapacity)
-        nominalChargeCapacity = try c.decode(Int.self, forKey: .nominalChargeCapacity)
+        designCapacity = try c.decodeIfPresent(Int.self, forKey: .designCapacity)
+        nominalChargeCapacity = try c.decodeIfPresent(Int.self, forKey: .nominalChargeCapacity)
         systemPowerIn = try c.decode(Int.self, forKey: .systemPowerIn)
         systemEnergyConsumed = try c.decode(Int.self, forKey: .systemEnergyConsumed)
         batteryPower = try c.decode(Int64.self, forKey: .batteryPower)
@@ -136,8 +136,9 @@ struct BatteryReading: Codable, Identifiable {
         }
     }
 
-    var temperatureCelsius: Double {
-        Double(temperature) / 10.0 - 273.15
+    var temperatureCelsius: Double? {
+        guard let temperature, temperature > 0 else { return nil }
+        return Double(temperature) / 10.0 - 273.15
     }
 
     var voltageVolts: Double {
@@ -156,8 +157,9 @@ struct BatteryReading: Codable, Identifiable {
         }
     }
 
-    var batteryHealth: Double {
-        guard designCapacity > 0 else { return 0 }
+    var batteryHealth: Double? {
+        guard let designCapacity, designCapacity > 0,
+              let nominalChargeCapacity, nominalChargeCapacity > 0 else { return nil }
         return Double(nominalChargeCapacity) / Double(designCapacity) * 100.0
     }
 

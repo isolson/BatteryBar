@@ -8,13 +8,19 @@ class UpdateChecker: ObservableObject {
 
     private let repo = "isolson/BatteryBar"
     private let checkInterval: TimeInterval = 6 * 3600
+    private let session: URLSession
+    private let defaults: UserDefaults
+    private let currentVersion: String
 
-    private var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0"
+    init(session: URLSession = .shared, defaults: UserDefaults = .standard, currentVersion: String? = nil) {
+        self.session = session
+        self.defaults = defaults
+        self.currentVersion = currentVersion
+            ?? Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0"
     }
 
     func checkIfNeeded() async {
-        let lastCheck = UserDefaults.standard.double(forKey: "lastUpdateCheck")
+        let lastCheck = defaults.double(forKey: "lastUpdateCheck")
         if Date().timeIntervalSince1970 - lastCheck < checkInterval { return }
         await checkForUpdates()
     }
@@ -26,7 +32,7 @@ class UpdateChecker: ObservableObject {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
 
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -35,7 +41,7 @@ class UpdateChecker: ObservableObject {
 
             let remote = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
 
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastUpdateCheck")
+            defaults.set(Date().timeIntervalSince1970, forKey: "lastUpdateCheck")
 
             if isNewer(remote: remote, local: currentVersion) {
                 latestVersion = remote

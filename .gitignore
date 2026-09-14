@@ -1,5 +1,6 @@
 .DS_Store
 .build/
 *.xcodeproj/
-BatteryBar.app/Contents/MacOS/
+BatteryBar.app/
 *.zip
+dist/

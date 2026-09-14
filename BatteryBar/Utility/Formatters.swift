@@ -2,8 +2,9 @@ import Foundation
 import SwiftUI
 
 enum BatteryFormatters {
-    static func formatTemperature(_ celsius: Double) -> String {
-        String(format: "%.1f°C", celsius)
+    static func formatTemperature(_ celsius: Double?) -> String {
+        guard let celsius, celsius.isFinite else { return "Unavailable" }
+        return String(format: "%.1f°C", celsius)
     }
 
     static func formatTimeRemaining(_ minutes: Int?) -> String {
@@ -35,8 +36,9 @@ enum BatteryFormatters {
         String(format: "%.2fA", amps)
     }
 
-    static func formatHealth(_ health: Double) -> String {
-        String(format: "%.0f%%", health)
+    static func formatHealth(_ health: Double?) -> String {
+        guard let health, health.isFinite else { return "Unavailable" }
+        return String(format: "%.0f%%", health)
     }
 
     static func bottleneckText(_ bottleneck: ChargingBottleneck) -> String {

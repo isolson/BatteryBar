@@ -13,11 +13,12 @@ class HistoryStore: ObservableObject {
     // ~720 (1h@5s) + ~1380 (23h@1min) + ~1728 (6d@5min) ≈ 3828 max
     private let maxAge: TimeInterval = 7 * 24 * 3600
 
-    init() {
+    init(persistenceURL: URL? = nil) {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let appDir = appSupport.appendingPathComponent("BatteryBar")
-        try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
-        persistenceURL = appDir.appendingPathComponent("history.json")
+        self.persistenceURL = persistenceURL ?? appSupport.appendingPathComponent("BatteryBar/history.json")
+        try? FileManager.default.createDirectory(
+            at: self.persistenceURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
         loadFromDisk()
         startPeriodicSave()
 

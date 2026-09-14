@@ -76,7 +76,7 @@ struct DetailPanel: View {
                 }
 
             } else {
-                Text("No Battery")
+                Text("Battery data unavailable")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
