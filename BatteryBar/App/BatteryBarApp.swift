@@ -20,13 +20,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 270, height: 380)
         popover.behavior = .transient
         let checker = updateChecker
-        popover.contentViewController = NSHostingController(
+        let panelController = NSHostingController(
             rootView: DetailPanel(appState: appState, updateChecker: updateChecker)
                 .task { await checker.checkIfNeeded() }
         )
+
+        panelController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = panelController
 
         cancellable = appState.$smoothedReading
             .receive(on: DispatchQueue.main)
