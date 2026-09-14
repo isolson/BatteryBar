@@ -8,13 +8,9 @@ struct DetailPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let r = appState.smoothedReading {
-                // Flow diagram header + verdict
-                VStack(spacing: 6) {
-                    flowDiagram(r)
-                    verdictLine(r)
-                }
-                .padding(8)
-                .background(
+                flowDiagram(r)
+                    .padding(8)
+                    .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(.white.opacity(0.04))
                             .overlay(
@@ -22,6 +18,8 @@ struct DetailPanel: View {
                                     .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
                             )
                     )
+
+                verdictLine(r)
 
                 // Collapsible details
                 HStack {
@@ -123,14 +121,14 @@ struct DetailPanel: View {
 
     @ViewBuilder
     private func flowDiagram(_ r: BatteryReading) -> some View {
-        let showCharger = r.externalConnected && r.chargeWatts > 0
+        let showCharger = r.externalConnected
 
         Grid(horizontalSpacing: 4, verticalSpacing: 1) {
             GridRow(alignment: .firstTextBaseline) {
                 if showCharger {
-                    flowValue(icon: "bolt.fill", value: BatteryFormatters.formatWatts(r.chargeWatts))
+                    flowValue(icon: "bolt.fill", value: BatteryFormatters.formatWatts(r.deliveringWatts))
                         .foregroundStyle(.green)
-                        .help("Power flowing from the charger to the battery")
+                        .help("Power supplied by the connected charger")
                     flowArrow
                 }
 

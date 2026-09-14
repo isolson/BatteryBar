@@ -17,8 +17,8 @@ enum MenuBarRenderer {
             .baselineOffset: 1
         ]
 
-        if r.externalConnected && r.chargeWatts > 0 {
-            let num = BatteryFormatters.formatWattsNumber(r.chargeWatts, rounded: true)
+        if r.externalConnected {
+            let num = BatteryFormatters.formatWattsNumber(r.deliveringWatts, rounded: true)
             str.append(NSAttributedString(string: num, attributes: numAttrs))
             str.append(NSAttributedString(string: "w", attributes: unitAttrs))
             str.append(NSAttributedString(string: " \u{2192} ", attributes: numAttrs))
