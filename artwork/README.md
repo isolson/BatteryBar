@@ -13,3 +13,13 @@ To edit the icon:
 3. Run `make build` and `bash scripts/test-release.sh`. Check the icon at small sizes and in default, dark, and mono appearances on macOS 27. The macOS 26 CI job saves the compiled icon as an artifact for local checks.
 
 Inkscape is needed only to update the artwork. Normal builds use Apple's tools and the tracked fallback. An image-generation concept guided the design; the final artwork is editable SVG. The [concept prompt](concept-prompt.txt) is saved for reference.
+
+## Repository preview
+
+[SocialPreview.svg](SocialPreview.svg) uses the existing app icon for GitHub's link preview. To update its [PNG](SocialPreview.png), run:
+
+```bash
+/Applications/Inkscape.app/Contents/MacOS/inkscape artwork/SocialPreview.svg --export-type=png --export-filename=artwork/SocialPreview.png
+```
+
+Upload the PNG under **Repository Settings → General → Social preview**. It uses GitHub's recommended 1280 × 640 size and must remain under 1 MB. See [GitHub's preview guide](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview).
