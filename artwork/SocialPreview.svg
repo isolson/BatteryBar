@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1280" height="640" viewBox="0 0 1280 640">
-  <title>BatteryBar — battery power in your menu bar</title>
+  <title>BatteryBar — see where your power is actually going</title>
   <rect width="1280" height="640" fill="#F3F4EF"/>
   <image x="52" y="104" width="432" height="432" xlink:href="AppIcon.svg"/>
   <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
     <text x="532" y="286" font-size="88" font-weight="700" fill="#252E32">BatteryBar</text>
-    <text x="536" y="350" font-size="32" fill="#53634D">Battery power. In your menu bar.</text>
+    <text x="536" y="350" font-size="32" fill="#53634D">See where your power is actually going</text>
     <text x="536" y="421" font-size="22" fill="#66716A">macOS · Apple Silicon · Open source</text>
   </g>
 </svg>
