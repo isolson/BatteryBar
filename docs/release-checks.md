@@ -11,6 +11,6 @@ Run these checks on the exact draft ZIP before publication. Use an Apple Silicon
 7. Click **Quit**, reopen within two seconds, then quit again. Wait at least 10 seconds and confirm that the app stays closed. Reopen it and confirm that saved history still loads and any available update notice remains visible.
 8. Repeat first launch from a fresh user account with network access disabled to check the attached approval ticket. Keep normal macOS security settings enabled.
 
-After publication, check that version 1.0 shows **Update Available** and opens the v1.1.0 release page. Automatic checks can wait up to six hours after a previous successful check.
+After publication, confirm that the latest-release link and public ZIP are available. The original v1.0.0 release has no update checker and requires a manual download. For later source builds labeled 1.0 that include the update checker, confirm that **Update Available** opens the v1.1.0 release page. Automatic checks can wait up to six hours after a previous successful check.
 
 If any check fails, keep the release as a draft. Fix the fault and prepare a new version and tag; do not replace assets in an already published release.
