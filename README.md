@@ -19,9 +19,7 @@ BatteryBar shows charger power, system power use, and battery charge in the macO
 2. Open the ZIP file and drag `BatteryBar.app` to Applications.
 3. Open BatteryBar from Applications. Its readings appear in the menu bar. Click them to open the detail panel.
 
-Version 1.0.0 has a known signing fault ([issue #3](https://github.com/isolson/BatteryBar/issues/3)). If the latest release is still 1.0.0, build from source until the signed replacement is published. Do not change macOS security settings to open that download.
-
-The original v1.0.0 release has no update checker. Download a newer release manually to upgrade it.
+To upgrade from v1.0.0, quit BatteryBar and install the latest download manually. The original release has no update checker.
 
 ## Features
 
