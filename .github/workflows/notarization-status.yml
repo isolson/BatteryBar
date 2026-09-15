@@ -1,0 +1,41 @@
+name: Check notarization
+
+on:
+  workflow_dispatch:
+    inputs:
+      submission_id:
+        description: Apple notarization submission ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: macos-26
+    timeout-minutes: 5
+    steps:
+      - name: Query the existing submission
+        env:
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [[ "$SUBMISSION_ID" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] || {
+            echo 'A valid submission UUID is required' >&2; exit 1;
+          }
+          : "${APPLE_ID:?Apple Account secret is missing}"
+          : "${APPLE_TEAM_ID:?Team ID secret is missing}"
+          : "${APPLE_APP_SPECIFIC_PASSWORD:?App-specific password secret is missing}"
+          credentials=(--apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD")
+          xcrun notarytool info "$SUBMISSION_ID" "${credentials[@]}" --output-format json > "$RUNNER_TEMP/notarization-info.json"
+          jq '{id, status, createdDate, name}' "$RUNNER_TEMP/notarization-info.json"
+          status=$(jq -er '.status' "$RUNNER_TEMP/notarization-info.json")
+          printf 'Apple notarization status: **%s**\n\nSubmission: %s\n' "$status" "$SUBMISSION_ID" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$status" == Invalid || "$status" == Rejected ]]; then
+            xcrun notarytool log "$SUBMISSION_ID" "${credentials[@]}"
+            exit 1
+          fi

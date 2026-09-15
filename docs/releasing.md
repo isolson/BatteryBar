@@ -36,4 +36,6 @@ SIGNING_IDENTITY='Developer ID Application: Your Name (TEAMID)' \
 NOTARY_PROFILE=BatteryBar RELEASE_TAG=v1.1.0 make release
 ```
 
-The verified ZIP and checksum are written to `dist/`. For a profile in a separate keychain, also set `NOTARY_KEYCHAIN` to its path. A local release command does not publish to GitHub. If notarization fails, fix the reported error and run the command again; do not upload a local development build.
+The verified ZIP and checksum are written to `dist/`. For a profile in a separate keychain, also set `NOTARY_KEYCHAIN` to its path. A local release command does not publish to GitHub. If Apple rejects the upload, fix the reported error before you run the command again. Do not upload a local development build.
+
+If the wait times out, Apple may still be processing the upload. In GitHub Actions, run **Check notarization** with the submission ID from the failed run. This checks the existing upload without sending another copy. `In Progress` means wait; `Accepted` means Apple approved it; `Invalid` or `Rejected` requires checking Apple's log. A timeout is not an approval or a rejection.
