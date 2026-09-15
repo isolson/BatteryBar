@@ -24,7 +24,7 @@ The release job imports credentials into a temporary keychain and removes them w
 1. Set the version and build number in `BatteryBar/Resources/Info.plist`. Update `docs/release-notes.md`. For this release, use version `1.1.0`, build `2`.
 2. Run `make test build` and `bash scripts/test-release.sh`. Merge the change into `main` after the macOS 15 and 26 checks pass.
 3. Tag that revision as `v1.1.0` and push the tag. **Prepare release** checks the tag, builds, signs, notarizes, attaches Apple's approval ticket, and verifies the extracted ZIP. It creates a draft release with `BatteryBar.app.zip` and `BatteryBar.app.zip.sha256`. A failed check stops the release.
-4. Complete the [download checks](release-checks.md) on the exact draft assets. Publish the draft only after they pass. Keep previous releases. Version 1.0 will then find the new release through its existing update link.
+4. Complete the [download checks](release-checks.md) on the exact draft assets. Publish the draft only after they pass. Keep previous releases. The original v1.0.0 release has no update checker; its users must download the replacement manually.
 
 ## Release from this Mac
 

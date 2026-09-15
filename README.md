@@ -21,6 +21,8 @@ BatteryBar shows charger power, system power use, and battery charge in the macO
 
 Version 1.0.0 has a known signing fault ([issue #3](https://github.com/isolson/BatteryBar/issues/3)). If the latest release is still 1.0.0, build from source until the signed replacement is published. Do not change macOS security settings to open that download.
 
+The original v1.0.0 release has no update checker. Download a newer release manually to upgrade it.
+
 ## Features
 
 - Live charger wattage, system power use, and battery percentage
